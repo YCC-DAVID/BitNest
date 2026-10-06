@@ -4,19 +4,26 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* Layout: single reading column (~68ch) that widens to a two-lane stage for the live comparison; the byte diagram is the one ornament. */
+/* Layout: one reading column (~68ch) that widens to full-width stages for the live replay, the paper figures and the charts.
+   Blue = the 4-bit base / draft, orange = the refinement / target, everywhere (as in the paper's figures). */
 :root {
   --bg: #f4f6f9;
   --surface: #ffffff;
   --ink: #131c28;
   --muted: #566274;
+  --faint: #8a94a3;
   --line: #d9dee6;
-  --draft: #2f5fd7;        /* tokens proposed by the W4A8 draft and accepted */
+  --grid: #e7ebf0;
+  --draft: #2f5fd7;        /* base plane / draft; text links */
   --draft-soft: #dfe7fb;
-  --target: #c2541c;       /* tokens produced by the W8A8 target */
+  --target: #c2541c;       /* refinement plane / target */
   --target-soft: #f7e1d4;
+  --mark-hero: #2f5fd7;    /* chart marks: BitNest */
+  --mark-alt: #c2541c;
+  --mark-base: #8a94a3;    /* chart marks: baselines (de-emphasis) */
   --fp16: #5d6878;
   --focus: #2f5fd7;
+  --h1: #cde2fb; --h2: #9ec5f4; --h3: #6da7ec; --h4: #3987e5; --h5: #256abf; --h6: #184f95;  /* sequential blue (heatmap) */
   --f-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
   --f-body: "Source Serif 4", Georgia, "Times New Roman", serif;
   --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -24,20 +31,24 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --muted: #9aa6b7; --line: #2a3442;
-    --draft: #7ea2ff; --draft-soft: #1f2d4f; --target: #f08a52; --target-soft: #44281b; --fp16: #a3adbb; --focus: #7ea2ff;
+    --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --muted: #9aa6b7; --faint: #7d8796; --line: #2a3442; --grid: #222b37;
+    --draft: #7ea2ff; --draft-soft: #1f2d4f; --target: #f08a52; --target-soft: #44281b;
+    --mark-hero: #6488f0; --mark-alt: #dd6d36; --mark-base: #7d8796; --fp16: #a3adbb; --focus: #7ea2ff;
+    --h1: #1b2a44; --h2: #1c3d6e; --h3: #22539a; --h4: #2e6bc2; --h5: #4f8ae0; --h6: #86b6ef;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --muted: #9aa6b7; --line: #2a3442;
-  --draft: #7ea2ff; --draft-soft: #1f2d4f; --target: #f08a52; --target-soft: #44281b; --fp16: #a3adbb; --focus: #7ea2ff;
+  --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --muted: #9aa6b7; --faint: #7d8796; --line: #2a3442; --grid: #222b37;
+  --draft: #7ea2ff; --draft-soft: #1f2d4f; --target: #f08a52; --target-soft: #44281b;
+  --mark-hero: #6488f0; --mark-alt: #dd6d36; --mark-base: #7d8796; --fp16: #a3adbb; --focus: #7ea2ff;
+  --h1: #1b2a44; --h2: #1c3d6e; --h3: #22539a; --h4: #2e6bc2; --h5: #4f8ae0; --h6: #86b6ef;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: var(--s0); line-height: 1.6; }
 .wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 0 72px; }
-.col { max-width: 68ch; }
+.col { max-width: 68ch; display: grid; gap: 10px; }
 a { color: var(--draft); text-underline-offset: 3px; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.15; margin: 0; }
@@ -45,7 +56,9 @@ h2 { font-size: var(--s2); font-weight: 700; }
 h3 { font-size: var(--s1); font-weight: 700; }
 p { margin: 0; }
 .label { font-family: var(--f-display); font-size: var(--s-1); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-section { display: grid; gap: 18px; padding-block: 48px 0; }
+section { display: grid; gap: 18px; padding-block: 56px 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; display: grid; gap: 14px; min-width: 0; }
+.note { font-size: 0.875rem; color: var(--muted); }
 
 /* ---------- header */
 header { display: grid; gap: 22px; padding-block: 56px 8px; }
@@ -55,22 +68,21 @@ h1 { font-size: var(--s4); font-weight: 800; letter-spacing: -0.02em; }
 .byte span { aspect-ratio: 1; border-radius: 3px; }
 .byte .hi { background: var(--draft); }
 .byte .lo { background: var(--target); opacity: 0.85; }
-.subtitle { font-family: var(--f-display); font-size: var(--s2); font-weight: 500; color: var(--ink); max-width: 30ch; line-height: 1.25; }
-.authors { color: var(--muted); font-size: var(--s0); max-width: 90ch; }
+.subtitle { font-family: var(--f-display); font-size: var(--s2); font-weight: 500; max-width: 30ch; line-height: 1.25; }
+.authors { color: var(--muted); max-width: 90ch; }
 .links { display: flex; flex-wrap: wrap; gap: 10px; }
 .btn { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-display); font-weight: 700; font-size: 0.9375rem;
   padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; cursor: pointer; }
 .btn:hover { border-color: var(--ink); }
 .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .btn.primary:hover { opacity: 0.9; }
-
-/* ---------- demo */
-.demo { display: grid; gap: 16px; padding: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
-.demo-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-.tab { font-family: var(--f-display); font-weight: 700; font-size: 0.875rem; padding: 7px 14px; border-radius: 999px;
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { font-family: var(--f-display); font-weight: 700; font-size: 0.875rem; padding: 7px 14px; border-radius: 999px;
   border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
-.tab[aria-selected="true"] { color: var(--ink); border-color: var(--ink); }
+.seg button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+
+/* ---------- live replay */
+.demo-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .speed { font-family: var(--f-mono); font-size: 0.8125rem; color: var(--muted); display: flex; gap: 4px; align-items: center; }
 .speed button { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
@@ -82,7 +94,7 @@ h1 { font-size: var(--s4); font-weight: 800; letter-spacing: -0.02em; }
 @media (max-width: 760px) { .lanes { grid-template-columns: 1fr; } }
 .lane { display: grid; grid-template-rows: auto auto 1fr; gap: 10px; min-width: 0; }
 .lane-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.lane-name { font-family: var(--f-display); font-weight: 700; font-size: var(--s0); }
+.lane-name { font-family: var(--f-display); font-weight: 700; }
 .lane-name small { display: block; font-weight: 500; color: var(--muted); font-size: 0.8125rem; }
 .meter { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; font-size: 0.8125rem; color: var(--muted); }
 .meter strong { display: block; font-size: var(--s2); color: var(--ink); font-weight: 600; line-height: 1.1; }
@@ -103,29 +115,85 @@ h1 { font-size: var(--s4); font-weight: 800; letter-spacing: -0.02em; }
 .round i.t { background: var(--target); box-shadow: none; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.8125rem; color: var(--muted); font-family: var(--f-display); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
-.sw { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.sw { width: 12px; height: 12px; border-radius: 2px; display: inline-block; flex: none; }
 .summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
 @media (max-width: 760px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .stat { display: grid; gap: 2px; min-width: 0; }
-.stat b { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: var(--s1); font-weight: 600; }
+.stat b { font-family: var(--f-mono); font-size: var(--s1); font-weight: 600; }
 .stat span { font-size: 0.8125rem; color: var(--muted); font-family: var(--f-display); }
-.note { font-size: 0.875rem; color: var(--muted); }
 
-/* ---------- method */
-.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; overflow-x: auto; }
-.figure svg { display: block; width: 100%; min-width: 620px; height: auto; }
-.figure text { font-family: var(--f-mono); font-size: 12px; fill: var(--ink); }
-.figure .cap { font-family: var(--f-display); font-size: 13px; font-weight: 700; fill: var(--muted); letter-spacing: 0.06em; }
-.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-@media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
-.step { display: grid; gap: 8px; align-content: start; }
-.step .n { font-family: var(--f-mono); font-size: 0.8125rem; color: var(--draft); }
-.step p { color: var(--ink); }
-.eq { font-family: var(--f-mono); font-size: 0.875rem; background: var(--bg); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: nowrap; }
+/* ---------- headline numbers */
 .big { display: flex; flex-wrap: wrap; gap: 28px 56px; }
 .big div { display: grid; gap: 4px; }
 .big b { font-family: var(--f-display); font-size: var(--s3); font-weight: 800; letter-spacing: -0.01em; }
 .big span { color: var(--muted); font-size: 0.9375rem; max-width: 26ch; }
+
+/* ---------- paper figures */
+figure { margin: 0; display: grid; gap: 12px; }
+.paper { background: #ffffff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; overflow-x: auto; }
+.paper img { display: block; width: 100%; height: auto; min-width: 560px; }
+figcaption { font-size: 0.9375rem; color: var(--muted); max-width: 80ch; }
+figcaption b { color: var(--ink); font-family: var(--f-display); }
+.fig-pair { display: grid; gap: 28px; }
+.fig-pair .narrow { max-width: 860px; }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+.step { display: grid; gap: 8px; align-content: start; }
+.step .n { font-family: var(--f-mono); font-size: 0.8125rem; color: var(--draft); }
+.eq { font-family: var(--f-mono); font-size: 0.875rem; background: var(--bg); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: nowrap; }
+
+/* ---------- charts */
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 12px; }
+.chart-head .t { display: grid; gap: 4px; }
+.chart { position: relative; min-width: 0; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { font-family: var(--f-display); font-size: 12px; fill: var(--muted); }
+.chart .tick line, .chart .gridline { stroke: var(--grid); stroke-width: 1; }
+.chart .axis { stroke: var(--line); stroke-width: 1; }
+.chart .val { fill: var(--ink); font-family: var(--f-mono); font-size: 12px; font-weight: 600; }
+.chart .rowlabel { fill: var(--ink); font-size: 13px; font-weight: 700; }
+.chart .hit { fill: transparent; cursor: default; }
+.chart .hl { fill: var(--grid); opacity: 0; }
+.chart .row:hover .hl, .chart .row:focus .hl { opacity: 1; }
+.chart .row:focus { outline: none; }
+.tip { position: absolute; pointer-events: none; z-index: 5; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; font-family: var(--f-display); font-size: 0.8125rem; box-shadow: 0 6px 20px rgba(10, 20, 35, 0.12); min-width: 150px; }
+.tip .h { font-weight: 700; margin-bottom: 4px; color: var(--ink); }
+.tip .r { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; color: var(--muted); }
+.tip .r b { color: var(--ink); font-family: var(--f-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tip .k { height: 2px; border-radius: 1px; }
+.keys { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--f-display); font-size: 0.8125rem; color: var(--muted); }
+.keys span { display: inline-flex; align-items: center; gap: 6px; }
+.keys svg { flex: none; }
+.chart-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 900px) { .chart-pair { grid-template-columns: 1fr; } }
+details summary { cursor: pointer; font-family: var(--f-display); font-weight: 700; font-size: 0.875rem; color: var(--muted); }
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 0.875rem; width: 100%; }
+th, td { padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; font-variant-numeric: tabular-nums; }
+th { font-family: var(--f-display); font-weight: 700; color: var(--muted); font-size: 0.8125rem; }
+th:first-child, td:first-child { text-align: left; }
+#edge-table th:nth-child(-n+3), #edge-table td:nth-child(-n+3) { text-align: left; }
+td { font-family: var(--f-mono); font-size: 0.8125rem; }
+td.name { font-family: var(--f-display); font-size: 0.875rem; }
+tr.ours td { font-weight: 600; color: var(--ink); }
+tr.ours td.name { color: var(--draft); }
+.delta { color: var(--muted); font-size: 0.75rem; margin-left: 4px; }
+.hm { display: grid; gap: 3px; }
+.hm-row { display: grid; grid-template-columns: 120px repeat(7, minmax(0, 1fr)); gap: 3px; align-items: stretch; }
+.hm-row > span { font-family: var(--f-display); font-size: 0.8125rem; color: var(--muted); display: flex; align-items: center; }
+.hm-row > span.c { justify-content: center; }
+.cell { border-radius: 4px; padding: 10px 4px; text-align: center; font-family: var(--f-mono); font-size: 0.8125rem; font-weight: 600; outline-offset: 1px; }
+.cell:hover, .cell:focus { outline: 2px solid var(--ink); }
+.cell.avg { box-shadow: inset 0 0 0 1px var(--line); background: transparent !important; color: var(--ink) !important; }
+@media (max-width: 640px) { .hm-row { grid-template-columns: 78px repeat(7, minmax(0, 1fr)); } .cell { font-size: 0.6875rem; padding: 8px 1px; } }
+.scale { display: flex; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: 0.75rem; color: var(--muted); }
+.scale i { height: 10px; width: 160px; border-radius: 3px; background: linear-gradient(90deg, var(--h1), var(--h2), var(--h3), var(--h4), var(--h5), var(--h6)); }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 760px) { .tiles { grid-template-columns: 1fr; } }
+.tile { display: grid; gap: 4px; align-content: start; }
+.tile b { font-family: var(--f-display); font-size: var(--s2); font-weight: 800; }
+.tile span { color: var(--muted); font-size: 0.875rem; }
 pre.bib { font-family: var(--f-mono); font-size: 0.8125rem; line-height: 1.55; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; margin: 0; }
 .bib-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
@@ -148,17 +216,18 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
     </div>
   </header>
 
+  <!-- ===================== live replay ===================== -->
   <section aria-labelledby="demo-h">
-    <div class="col" style="display:grid;gap:8px">
+    <div class="col">
       <p class="label">Recorded run</p>
       <h2 id="demo-h">Same prompt, same GPU: FP16 decoding vs BitNest</h2>
       <p>Both lanes replay a real run in real time. Each token appears at the moment the GPU produced it, prefill included.
         In the BitNest lane, <span style="background:var(--draft-soft);border-radius:2px">shaded</span> tokens were proposed by the 4-bit draft and accepted by the 8-bit target;
         <span style="color:var(--target);font-weight:600">orange</span> tokens came from the target itself.</p>
     </div>
-    <div class="demo">
+    <div class="card">
       <div class="demo-top">
-        <div class="tabs" role="tablist" id="tabs"></div>
+        <div class="seg" id="tabs" role="group" aria-label="Example"></div>
         <div class="controls">
           <button class="btn primary" id="play" type="button">Replay in real time</button>
           <div class="speed" role="group" aria-label="Playback speed">speed
@@ -176,7 +245,7 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
             <div class="meter"><strong id="fp-rate">–</strong><span id="fp-clock">tok/s</span></div>
           </div>
           <div class="track"><i id="fp-bar"></i></div>
-          <div class="out" id="fp-out" aria-live="off"></div>
+          <div class="out" id="fp-out"></div>
         </div>
         <div class="lane bn">
           <div class="lane-head">
@@ -184,7 +253,7 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
             <div class="meter"><strong id="bn-rate">–</strong><span id="bn-clock">tok/s</span></div>
           </div>
           <div class="track"><i id="bn-bar"></i></div>
-          <div class="out" id="bn-out" aria-live="off"></div>
+          <div class="out" id="bn-out"></div>
         </div>
       </div>
       <div style="display:grid;gap:8px">
@@ -201,8 +270,9 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
     </div>
   </section>
 
+  <!-- ===================== abstract ===================== -->
   <section aria-labelledby="abs-h">
-    <div class="col" style="display:grid;gap:14px">
+    <div class="col">
       <p class="label">Abstract</p>
       <h2 id="abs-h">A draft model that lives inside the target's weights</h2>
       <p>Speculative decoding needs a cheap draft model, and keeping a separate one costs memory. BitNest embeds a low-precision
@@ -213,56 +283,112 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
         1.48–1.61× end-to-end speedup over FP16 autoregressive decoding.</p>
     </div>
     <div class="big">
-      <div><b>95.2%</b><span>average speculative acceptance rate, 7B–8B models</span></div>
+      <div><b>95.2%</b><span>average speculative acceptance rate, 4 models × 6 workloads</span></div>
       <div><b>1.48–1.61×</b><span>end-to-end speedup over FP16 autoregressive decoding</span></div>
-      <div><b>0 bytes</b><span>of extra weight memory for the draft model</span></div>
+      <div><b>6.22 GiB</b><span>LLaMA-2-7B weights for draft and target together, same as W8 alone (9.38 GiB with a separate W4 draft)</span></div>
     </div>
   </section>
 
+  <!-- ===================== method ===================== -->
   <section aria-labelledby="m-h">
-    <div class="col" style="display:grid;gap:8px">
+    <div class="col">
       <p class="label">Method</p>
-      <h2 id="m-h">One byte, two models</h2>
-      <p>Every weight is stored as an 8-bit code split into two 4-bit planes. The draft streams only the high plane, so a draft
-        step moves half the bytes of a target step.</p>
+      <h2 id="m-h">One weight tensor, two models</h2>
     </div>
-    <div class="figure">
-      <svg viewBox="0 0 880 250" role="img" aria-labelledby="fig-t">
-        <title id="fig-t">An 8-bit weight code is split into a high nibble read by the draft and a low nibble that only the target adds.</title>
-        <text class="cap" x="20" y="28">8-BIT WEIGHT CODE</text>
-        <g id="cells"></g>
-        <text x="20" y="128">high nibble = q4 + 8</text>
-        <text x="236" y="128">low nibble = qr + 8</text>
-        <path d="M 112 140 L 112 172 L 560 172" fill="none" stroke="var(--draft)" stroke-width="2"></path>
-        <path d="M 328 140 L 328 214 L 560 214" fill="none" stroke="var(--target)" stroke-width="2"></path>
-        <path d="M 112 172 L 112 214 L 560 214" fill="none" stroke="var(--draft)" stroke-width="2" stroke-dasharray="4 4"></path>
-        <rect x="568" y="154" width="296" height="36" rx="6" fill="var(--draft-soft)"></rect>
-        <text x="582" y="177">draft  W4 = q4 · s          (W4A8)</text>
-        <rect x="568" y="196" width="296" height="36" rx="6" fill="var(--target-soft)"></rect>
-        <text x="582" y="219">target W8 = (16·q4 + qr) · s/16  (W8A8)</text>
-        <text class="cap" x="568" y="140">READ BY</text>
-      </svg>
-    </div>
+    <figure>
+      <div class="paper"><img src="img/bitnest-main-method.webp" width="1600" height="802" alt="BitNest overview: rotation, base quantization, residual refinement, dual-plane storage, and speculative decoding where the draft reads the base plane and the target reads both planes."></div>
+      <figcaption><b>Figure 1.</b> BitNest first applies a function-preserving rotation to obtain an equivalent model, then quantizes the transformed
+        weights into a b-bit base and the remaining error into an r-bit refinement, organized as dual-plane storage. Drafting reads only the
+        base; verification reads both planes to recover the (b+r)-bit target.</figcaption>
+    </figure>
     <div class="steps">
       <div class="step"><span class="n">Step 1 · rotate</span><h3>Remove outliers</h3>
         <p>Learned rotations (SpinQuant) are fused into the weights so that 4-bit quantization is accurate.</p></div>
-      <div class="step"><span class="n">Step 2 · fit the draft</span><h3>GPTQ at 4 bits</h3>
-        <p>The 4-bit model is fitted first with GPTQ and locked as the high nibble, so the draft is a strong model in its own right.</p>
-        <div class="eq">hi = q4 = GPTQ-W4(W)</div></div>
+      <div class="step"><span class="n">Step 2 · fit the base</span><h3>GPTQ at 4 bits</h3>
+        <p>The 4-bit base is fitted first with GPTQ, so the draft is a strong model in its own right.</p>
+        <div class="eq">W_B = Base · s_Base</div></div>
       <div class="step"><span class="n">Step 3 · refine</span><h3>Residual back to 8 bits</h3>
-        <p>The low nibble rounds the remaining residual on a 16× finer grid, recovering 8-bit quality in closed form.</p>
-        <div class="eq">lo = qr = round((W − q4·s) / (s/16))</div></div>
+        <p>The refinement rounds the remaining error on a 16× finer grid (s_Ref = s_Base/16), recovering 8-bit quality in closed form.</p>
+        <div class="eq">Ref = Q_r((W′ − W_B) / s_Ref)</div></div>
     </div>
-    <div class="col" style="display:grid;gap:10px">
-      <h3>Decoding</h3>
-      <p>The draft proposes γ tokens one at a time reading only the high planes; the target then checks all of them in a single
-        batched pass reading both planes and keeps the longest prefix it agrees with, plus one token of its own. The output is
-        the target's greedy output. The KV cache is nested the same way: the draft attends over 4-bit keys and values, the
-        target over 8-bit ones, from one cache. Dual-plane GEMM and attention kernels are written in Triton, and every step
-        runs as a captured CUDA graph.</p>
+    <div class="fig-pair">
+      <figure class="narrow">
+        <div class="paper"><img src="img/dual-plane-storage.webp" width="1400" height="546" alt="Dual-plane storage: base codes of all weights packed into a base plane of N/2 bytes, refinement codes into a separate plane of N/2 bytes."></div>
+        <figcaption><b>Figure 2.</b> Dual-plane weight storage. Base and refinement codes are packed into two independent 4-bit streams of N/2 bytes each.
+          The draft streams only the base plane, half the bytes of a target step; the target reads both.</figcaption>
+      </figure>
+      <figure>
+        <div class="paper"><img src="img/long-context-kv.webp" width="1800" height="279" alt="KV nesting: prefill writes base and refinement KV, the draft reads only the base view, verification reads both views; accepted entries are kept and the rejected suffix is discarded."></div>
+        <figcaption><b>Figure 3.</b> KV nesting during speculative decoding. The draft reads only the low-bit base view of the cache; verification reads
+          the full view of the same nested cache. Accepted KV entries are retained and the rejected suffix is discarded.</figcaption>
+      </figure>
     </div>
   </section>
 
+  <!-- ===================== results ===================== -->
+  <section aria-labelledby="r-h">
+    <div class="col">
+      <p class="label">Results</p>
+      <h2 id="r-h">Faster than every self-speculative baseline, at W8A8 quality</h2>
+      <p>Single NVIDIA RTX A6000, batch 1, identical 2,048-token prompts for every method, 256 generated tokens. Speedup is measured
+        against the 16-bit autoregressive baseline of the same inference engine.</p>
+    </div>
+
+    <div class="card">
+      <div class="chart-head">
+        <div class="t"><h3>End-to-end decoding speedup across six workloads</h3>
+          <p class="note">Speedup over 16-bit autoregressive decoding. Hover a row for every method's value.</p></div>
+        <div class="seg" id="sp-models" role="group" aria-label="Model"></div>
+      </div>
+      <div class="keys" id="sp-keys"></div>
+      <div class="chart" id="sp-chart"></div>
+      <p class="note" id="sp-note"></p>
+      <details><summary>Show table</summary><div class="tbl" id="sp-table"></div></details>
+    </div>
+
+    <div class="card">
+      <div class="chart-head">
+        <div class="t"><h3>Quality of the target model</h3>
+          <p class="note">GSM8K accuracy (%, higher is better); all other columns are perplexity (lower is better). Small numbers show the change from FP16.</p></div>
+        <div class="seg" id="q-models" role="group" aria-label="Model"></div>
+      </div>
+      <div class="tbl" id="q-table"></div>
+      <p class="note">QSpec uses a W4A16 target and is evaluated with its own inference engine.</p>
+    </div>
+
+    <div class="card">
+      <div class="t" style="display:grid;gap:4px"><h3>Long context: LLaMA-2-7B-32K</h3>
+        <p class="note">Reading only the KV4 base during drafting matters more as the context grows. Hover for every method at one context length.</p></div>
+      <div class="chart-pair">
+        <div style="display:grid;gap:10px;min-width:0"><p class="label">(a) Speedup over 16-bit AR</p><div class="chart" id="lc-speed"></div></div>
+        <div style="display:grid;gap:10px;min-width:0"><p class="label">(b) Peak GPU memory, GiB</p><div class="chart" id="lc-mem"></div></div>
+      </div>
+      <details><summary>Show table</summary><div class="tbl" id="lc-table"></div></details>
+    </div>
+
+    <div class="card">
+      <div class="chart-head">
+        <div class="t"><h3>Draft acceptance rate during generation</h3>
+          <p class="note">Percent of draft tokens accepted, 2K prefixes, each method's own speculation length γ and acceptance definition.</p></div>
+        <div class="seg" id="acc-methods" role="group" aria-label="Method"></div>
+      </div>
+      <div class="hm" id="acc-hm"></div>
+      <div class="scale"><span id="acc-lo"></span><i></i><span id="acc-hi"></span></div>
+    </div>
+
+    <div class="card">
+      <div class="t" style="display:grid;gap:4px"><h3>Edge devices and beyond text</h3>
+        <p class="note">NVIDIA Jetson Orin NX (16 GB and 8 GB), greedy decoding, 256 tokens; energy averaged over the decode phase. OpenVLA-7B on LIBERO Spatial.</p></div>
+      <div class="tbl" id="edge-table"></div>
+      <div class="tiles">
+        <div class="tile"><b>2K → 10K</b><span>longest context LLaMA-2-7B-32K can run on the 16 GB Orin, FP16 vs BitNest</span></div>
+        <div class="tile"><b>89%</b><span>OpenVLA-7B success on LIBERO Spatial with BitNest (FP16 86%, standalone W4A8 80%)</span></div>
+        <div class="tile"><b>1.35×</b><span>OpenVLA-7B action-token decode speedup over FP16 (44.2 → 59.5 tok/s)</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== citation ===================== -->
   <section aria-labelledby="cite">
     <div class="bib-row"><h2 id="cite">Citation</h2><button class="btn" id="copy" type="button">Copy BibTeX</button></div>
     <pre class="bib" id="bib">@article{yang2026bitnest,
@@ -273,11 +399,315 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
 }</pre>
   </section>
 
-  <footer>BitNest · arXiv 2610.02800</footer>
+  <footer>BitNest · arXiv 2610.02800 · all results from the paper unless marked as a recorded run</footer>
 </div>
 
 <script id="trace" type="application/json">__TRACE__</script>
 <script>
+/* ===================== paper results (tables of arXiv 2610.02800) ===================== */
+var WL = ["Wiki", "GSM8K", "Code", "ShareGPT", "LongDoc", "PG19"];
+var MODELS = [["llama2", "LLaMA-2-7B"], ["llama3", "LLaMA-3-8B"], ["qwen2", "Qwen2-7B"], ["qwen25", "Qwen2.5-7B"]];
+var METHODS = [  // fixed order and marks; BitNest is the emphasized series
+  { id: "bitnest", name: "BitNest", cfg: "W4A8 → W8A8", shape: "circle", hero: true },
+  { id: "qspec", name: "QSpec", cfg: "W4A4 → W4A16", shape: "square" },
+  { id: "quantspec", name: "QuantSpec", cfg: "W4A16 → W16A16", shape: "triangle" },
+  { id: "dv", name: "Draft & Verify", cfg: "W16A16 → W16A16", shape: "diamond" }
+];
+var SPEED = {
+  llama2: { qspec: [1.35, 1.43, 1.46, 1.46, 1.44, 1.40], quantspec: [1.17, 1.19, 1.23, 1.22, 1.17, 1.12], dv: [0.96, 1.14, 1.16, 1.20, 1.16, 1.01], bitnest: [1.50, 1.59, 1.59, 1.61, 1.60, 1.57] },
+  llama3: { qspec: [1.38, 1.56, 1.55, 1.52, 1.51, 1.41], quantspec: [1.13, 1.21, 1.18, 1.30, 1.07, 1.13], dv: [1.01, 1.14, 1.15, 1.21, 1.10, 1.10], bitnest: [1.53, 1.55, 1.59, 1.59, 1.56, 1.49] },
+  qwen2: { bitnest: [1.48, 1.53, 1.54, 1.55, 1.53, 1.52] },
+  qwen25: { bitnest: [1.52, 1.58, 1.57, 1.58, 1.59, 1.57] }
+};
+var QCOLS = ["WikiText-2 ↓", "GSM8K ↑", "Code ↓", "ShareGPT ↓", "LongDoc ↓", "PG19 ↓"];
+var QUALITY = {
+  llama2: [["FP16", [5.4706, 13.6, 2.6069, 2.2206, 4.3336, 9.6594]], ["W8A8", [5.4762, 13.4, 2.6101, 2.2229, 4.3374, 9.6686]],
+           ["QSpec (W4A16)", [5.650, 12.5, 2.642, 2.389, 4.640, 10.052]], ["BitNest", [5.5123, 13.8, 2.6123, 2.2321, 4.3540, 9.7616]]],
+  llama3: [["FP16", [6.1389, 50.1, 2.7131, 2.6462, 5.2592, 11.8364]], ["W8A8", [6.1617, 50.0, 2.7192, 2.6551, 5.2755, 11.8722]],
+           ["QSpec (W4A16)", [6.383, 37.0, 2.680, 2.407, 5.595, 12.366]], ["BitNest", [6.2256, 49.8, 2.7327, 2.6639, 5.3117, 11.9476]]],
+  qwen2: [["FP16", [7.1337, 79.4, 2.2112, 2.3278, 5.2482, 13.7653]], ["W8A8", [7.1519, 78.9, 2.2131, 2.3319, 5.2582, 13.8070]],
+          ["BitNest", [7.1759, 77.6, 2.2274, 2.3397, 5.2781, 13.8628]]],
+  qwen25: [["FP16", [6.8507, 82.9, 2.0979, 2.3959, 5.5095, 12.8805]], ["W8A8", [6.8723, 83.2, 2.1011, 2.4003, 5.5193, 12.9236]],
+           ["BitNest", [6.9062, 82.0, 2.1124, 2.4061, 5.5384, 12.9981]]]
+};
+var CTX = ["4K", "8K", "16K", "32K"];
+var LC_SPEED = [
+  { name: "BitNest, draft KV4 → target KV8", short: "BitNest KV4→KV8", v: [1.53, 1.51, 1.56, 1.66], hero: true },
+  { name: "BitNest, KV8 → KV8", short: "BitNest KV8→KV8", v: [1.57, 1.45, 1.46, 1.38], alt: true },
+  { name: "BitNest, BF16 KV", short: "BitNest BF16 KV", v: [1.49, 1.43, 1.30, 1.13] },
+  { name: "QuantSpec", short: "QuantSpec", v: [1.11, 1.12, 1.19, 1.21] },
+  { name: "QSpec", short: "QSpec", v: [1.42, 1.30, 1.19, 1.11] }
+];
+var LC_MEM = [
+  { name: "BitNest", short: "BitNest", v: [9.2, 10.8, 14.1, 21.0], hero: true },
+  { name: "QSpec", short: "QSpec", v: [6.9, 9.4, 14.5, 24.0] },
+  { name: "QuantSpec", short: "QuantSpec", v: [16.2, 17.6, 20.4, 25.8] },
+  { name: "W8A8 AR", short: "W8A8 AR", v: [9.5, 12.3, 18.0, 29.6] },
+  { name: "BF16 AR", short: "BF16 AR", v: [15.1, 17.6, 22.7, 33.7] }
+];
+var ACC = {
+  bitnest: { name: "BitNest", rows: [["LLaMA-2-7B", "γ=4", [92.5, 95.9, 96.9, 97.8, 96.7, 94.2], 95.7], ["LLaMA-3-8B", "γ=3", [92.9, 96.1, 97.9, 97.8, 95.3, 92.0], 95.3],
+                                     ["Qwen2-7B", "γ=3", [93.6, 93.3, 96.7, 96.2, 95.9, 94.1], 95.0], ["Qwen2.5-7B", "γ=3", [92.1, 95.4, 95.0, 96.8, 95.4, 93.9], 94.8]] },
+  qspec: { name: "QSpec", rows: [["LLaMA-2-7B", "γ=3", [95.4, 97.4, 97.9, 98.1, 97.0, 94.5], 96.7], ["LLaMA-3-8B", "γ=3", [92.0, 97.0, 97.1, 97.5, 94.5, 90.8], 94.8]] },
+  quantspec: { name: "QuantSpec", rows: [["LLaMA-2-7B", "γ=6", [87.9, 89.6, 93.5, 95.1, 90.2, 81.5], 89.6], ["LLaMA-3-8B", "γ=6", [77.5, 88.9, 87.2, 94.6, 80.9, 77.7], 84.5]] },
+  dv: { name: "Draft & Verify", rows: [["LLaMA-2-7B", "adaptive", [62.6, 82.7, 82.8, 84.3, 83.0, 72.2], 77.9], ["LLaMA-3-8B", "adaptive", [69.4, 81.9, 81.3, 83.9, 78.2, 75.4], 78.4]] }
+};
+var EDGE = [
+  ["LLaMA-2-7B-32K", "Orin NX 16 GB", [["FP16 AR", "6.0", "1.00×", "1.52"], ["W8A8 AR", "7.8", "~1.30×", "1.15"], ["BitNest", "9.0–9.3", "~1.50×", "0.95"]]],
+  ["Llama-3.2-3B", "Orin NX 8 GB", [["FP16 AR", "10.6", "1.00×", "0.768"], ["W8A8 AR", "14.0", "1.32×", "0.54"], ["BitNest", "15.5–16.6", "1.46–1.57×", "0.46"]]]
+];
+
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function h(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  function segButtons(box, items, cur, onPick) {
+    box.innerHTML = "";
+    items.forEach(function (it) {
+      var b = h("button", null, it[1]); b.type = "button"; b.id = box.id + "-" + it[0];
+      b.setAttribute("aria-pressed", it[0] === cur ? "true" : "false");
+      b.addEventListener("click", function () {
+        Array.prototype.forEach.call(box.children, function (c) { c.setAttribute("aria-pressed", c === b ? "true" : "false"); });
+        onPick(it[0]);
+      });
+      box.appendChild(b);
+    });
+  }
+  function shape(g, kind, x, y, r, fill) {
+    if (kind === "circle") return el("circle", { cx: x, cy: y, r: r, fill: fill, stroke: "var(--surface)", "stroke-width": 2 }, g);
+    if (kind === "square") return el("rect", { x: x - r * 0.85, y: y - r * 0.85, width: r * 1.7, height: r * 1.7, rx: 1.5, fill: fill, stroke: "var(--surface)", "stroke-width": 2 }, g);
+    if (kind === "triangle") return el("path", { d: "M" + x + " " + (y - r * 1.05) + " L" + (x + r * 1.05) + " " + (y + r * 0.8) + " L" + (x - r * 1.05) + " " + (y + r * 0.8) + " Z", fill: fill, stroke: "var(--surface)", "stroke-width": 2, "stroke-linejoin": "round" }, g);
+    return el("path", { d: "M" + x + " " + (y - r * 1.1) + " L" + (x + r * 1.1) + " " + y + " L" + x + " " + (y + r * 1.1) + " L" + (x - r * 1.1) + " " + y + " Z", fill: fill, stroke: "var(--surface)", "stroke-width": 2, "stroke-linejoin": "round" }, g);
+  }
+  function keySvg(kind, fill, line) {
+    var s = el("svg", { width: line ? 18 : 14, height: 14, viewBox: line ? "0 0 18 14" : "0 0 14 14", "aria-hidden": "true" });
+    if (line) el("line", { x1: 1, y1: 7, x2: 17, y2: 7, stroke: fill, "stroke-width": 2, "stroke-linecap": "round" }, s);
+    else shape(s, kind, 7, 7, 4.5, fill);
+    return s;
+  }
+  // tooltip shared per chart container
+  function tipFor(box) {
+    var t = h("div", "tip"); t.hidden = true; box.appendChild(t);
+    return {
+      show: function (title, rows, x, y) {
+        t.innerHTML = ""; t.appendChild(h("div", "h", title));
+        rows.forEach(function (r) {
+          var row = h("div", "r"), k;
+          if (r.shape) { k = keySvg(r.shape, r.color); } else { k = h("span", "k"); k.style.background = r.color; if (r.strong) k.style.height = "3px"; }
+          row.appendChild(k); row.appendChild(h("span", null, r.label)); row.appendChild(h("b", null, r.value)); t.appendChild(row);
+        });
+        t.hidden = false;
+        var bw = box.clientWidth, tw = t.offsetWidth, th = t.offsetHeight;
+        var left = x + 14; if (left + tw > bw) left = Math.max(0, x - tw - 14);
+        t.style.left = left + "px"; t.style.top = Math.max(0, y - th / 2) + "px";
+      },
+      hide: function () { t.hidden = true; }
+    };
+  }
+  function niceTicks(lo, hi, step) { var out = []; for (var v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(4)); return out; }
+
+  /* ---------- speedup dot plot ---------- */
+  var spModel = "llama2";
+  function drawSpeed() {
+    var box = $("sp-chart"); box.innerHTML = "";
+    var data = SPEED[spModel], W = Math.max(320, box.clientWidth), narrow = W < 560;
+    var L = narrow ? 76 : 96, R = 56, T = 8, rowH = 44, B = 30, H = T + rowH * WL.length + B;
+    var lo = 0.9, hi = 1.7, x = function (v) { return L + (v - lo) / (hi - lo) * (W - L - R); };
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Speedup per workload for " + spModel }, box);
+    niceTicks(lo, hi, narrow ? 0.2 : 0.1).forEach(function (v) {
+      el("line", { x1: x(v), x2: x(v), y1: T, y2: T + rowH * WL.length, class: "gridline", style: v === 1 ? "stroke:var(--line)" : "" }, svg);
+      var t = el("text", { x: x(v), y: H - 10, "text-anchor": "middle" }, svg); t.textContent = v.toFixed(1) + "×";
+    });
+    var tip = tipFor(box);
+    var present = METHODS.filter(function (m) { return data[m.id]; });
+    WL.forEach(function (w, i) {
+      var cy = T + rowH * i + rowH / 2;
+      var g = el("g", { class: "row", tabindex: 0, "aria-label": w + ": " + present.map(function (m) { return m.name + " " + data[m.id][i].toFixed(2) + "×"; }).join(", ") }, svg);
+      el("rect", { x: 0, y: cy - rowH / 2 + 2, width: W, height: rowH - 4, rx: 6, class: "hl" }, g);
+      var lbl = el("text", { x: 4, y: cy + 4, class: "rowlabel" }, g); lbl.textContent = w;
+      var vals = present.map(function (m) { return data[m.id][i]; });
+      el("line", { x1: x(Math.min.apply(null, vals)), x2: x(Math.max.apply(null, vals)), y1: cy, y2: cy, stroke: "var(--line)", "stroke-width": 2 }, g);
+      present.slice().reverse().forEach(function (m) {   // BitNest drawn last (on top)
+        var v = data[m.id][i];
+        shape(g, m.shape, x(v), cy, m.hero ? 7 : 5.5, m.hero ? "var(--mark-hero)" : "var(--mark-base)");
+      });
+      var bv = data.bitnest[i], vt = el("text", { x: x(bv) + 12, y: cy + 4, class: "val" }, g); vt.textContent = bv.toFixed(2) + "×";
+      el("rect", { x: 0, y: cy - rowH / 2, width: W, height: rowH, class: "hit" }, g);
+      var show = function (ev) {
+        var r = box.getBoundingClientRect(), px = ev && ev.clientX != null ? ev.clientX - r.left : x(bv), py = cy;
+        tip.show(w, present.map(function (m) { return { label: m.name, value: data[m.id][i].toFixed(2) + "×", color: m.hero ? "var(--mark-hero)" : "var(--mark-base)", shape: m.shape }; }), px, py);
+      };
+      g.addEventListener("pointermove", show); g.addEventListener("focus", function () { show(null); });
+      g.addEventListener("pointerleave", tip.hide); g.addEventListener("blur", tip.hide);
+    });
+    // keys
+    var keys = $("sp-keys"); keys.innerHTML = "";
+    METHODS.forEach(function (m) {
+      var s = h("span"); s.appendChild(keySvg(m.shape, m.hero ? "var(--mark-hero)" : "var(--mark-base)"));
+      s.appendChild(document.createTextNode(m.name + " · " + m.cfg)); if (!data[m.id]) s.style.opacity = "0.45"; keys.appendChild(s);
+    });
+    $("sp-note").textContent = present.length === 1 ? "QSpec, QuantSpec and Draft & Verify have no official support for Qwen models (N/A in the paper)." : "";
+    // table twin
+    var tb = h("table"); var tr = h("tr"); tr.appendChild(h("th", null, "Method")); tr.appendChild(h("th", null, "Draft → Target"));
+    WL.forEach(function (w) { tr.appendChild(h("th", null, w)); }); var th = h("thead"); th.appendChild(tr); tb.appendChild(th);
+    var tbody = h("tbody");
+    METHODS.forEach(function (m) {
+      var r = h("tr", m.hero ? "ours" : null); r.appendChild(h("td", "name", m.name)); r.appendChild(h("td", "name", m.cfg));
+      WL.forEach(function (_, i) { r.appendChild(h("td", null, data[m.id] ? data[m.id][i].toFixed(2) + "×" : "N/A")); }); tbody.appendChild(r);
+    });
+    tb.appendChild(tbody); $("sp-table").innerHTML = ""; $("sp-table").appendChild(tb);
+  }
+  segButtons($("sp-models"), MODELS, spModel, function (k) { spModel = k; drawSpeed(); });
+
+  /* ---------- quality table ---------- */
+  function drawQuality(model) {
+    var rows = QUALITY[model], fp = rows[0][1], tb = h("table"), tr = h("tr");
+    tr.appendChild(h("th", null, "Method")); QCOLS.forEach(function (c) { tr.appendChild(h("th", null, c)); });
+    var th = h("thead"); th.appendChild(tr); tb.appendChild(th); var tbody = h("tbody");
+    rows.forEach(function (row, ri) {
+      var r = h("tr", row[0] === "BitNest" ? "ours" : null); r.appendChild(h("td", "name", row[0]));
+      row[1].forEach(function (v, ci) {
+        var td = h("td", null, ci === 1 ? v.toFixed(1) : v.toFixed(3));
+        if (ri > 0) { var d = v - fp[ci]; td.appendChild(h("span", "delta", (d >= 0 ? "+" : "−") + Math.abs(d).toFixed(ci === 1 ? 1 : 3))); }
+        r.appendChild(td);
+      });
+      tbody.appendChild(r);
+    });
+    tb.appendChild(tbody); $("q-table").innerHTML = ""; $("q-table").appendChild(tb);
+  }
+  segButtons($("q-models"), MODELS, "llama2", drawQuality); drawQuality("llama2");
+
+  /* ---------- long-context line charts ---------- */
+  function drawLines(box, series, opt) {
+    box.innerHTML = "";
+    var W = Math.max(300, box.clientWidth), L = 44, R = 128, T = 12, B = 30, H = 300;
+    var x = function (i) { return L + i * (W - L - R) / (CTX.length - 1); };
+    var y = function (v) { return T + (1 - (v - opt.lo) / (opt.hi - opt.lo)) * (H - T - B); };
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": opt.label }, box);
+    niceTicks(opt.lo, opt.hi, opt.step).forEach(function (v) {
+      el("line", { x1: L, x2: W - R + 8, y1: y(v), y2: y(v), class: "gridline" }, svg);
+      var t = el("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end" }, svg); t.textContent = opt.fmt(v);
+    });
+    CTX.forEach(function (c, i) { var t = el("text", { x: x(i), y: H - 8, "text-anchor": "middle" }, svg); t.textContent = c; });
+    var colorOf = function (s) { return s.hero ? "var(--mark-hero)" : s.alt ? "var(--mark-alt)" : "var(--mark-base)"; };
+    var order = series.slice().sort(function (a, b) { return (a.hero ? 1 : 0) - (b.hero ? 1 : 0); });   // hero on top
+    var paths = {};
+    order.forEach(function (s) {
+      var d = s.v.map(function (v, i) { return (i ? "L" : "M") + x(i) + " " + y(v); }).join(" ");
+      var g = el("g", { "data-s": s.short }, svg); paths[s.short] = g;
+      el("path", { d: d, fill: "none", stroke: colorOf(s), "stroke-width": s.hero ? 2.5 : 2, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: s.hero || s.alt ? 1 : 0.85 }, g);
+      s.v.forEach(function (v, i) { el("circle", { cx: x(i), cy: y(v), r: s.hero ? 4.5 : 3.5, fill: colorOf(s), stroke: "var(--surface)", "stroke-width": 2 }, g); });
+    });
+    // end labels with collision avoidance (min 15px apart) and leader lines
+    var ends = series.map(function (s) { return { s: s, y0: y(s.v[s.v.length - 1]), y: y(s.v[s.v.length - 1]) }; }).sort(function (a, b) { return a.y0 - b.y0; });
+    for (var k = 1; k < ends.length; k++) if (ends[k].y - ends[k - 1].y < 15) ends[k].y = ends[k - 1].y + 15;
+    for (k = ends.length - 2; k >= 0; k--) if (ends[k + 1].y - ends[k].y < 15) ends[k].y = ends[k + 1].y - 15;
+    var xe = x(CTX.length - 1);
+    ends.forEach(function (e) {
+      if (Math.abs(e.y - e.y0) > 1) el("path", { d: "M" + (xe + 6) + " " + e.y0 + " L" + (xe + 12) + " " + e.y, stroke: "var(--faint)", "stroke-width": 1, fill: "none" }, svg);
+      var t = el("text", { x: xe + 14, y: e.y + 4, class: e.s.hero ? "val" : "" }, svg);
+      t.textContent = opt.fmt(e.s.v[e.s.v.length - 1]) + " " + e.s.short;
+    });
+    // crosshair
+    var cross = el("line", { y1: T, y2: H - B, class: "axis", opacity: 0 }, svg);
+    var tip = tipFor(box);
+    var hit = el("rect", { x: L - 20, y: 0, width: W - L - R + 40, height: H, class: "hit", tabindex: 0, "aria-label": opt.label + " values by context length" }, svg);
+    var focusI = 0;
+    var at = function (i) {
+      cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
+      var rows = series.slice().sort(function (a, b) { return opt.desc ? b.v[i] - a.v[i] : a.v[i] - b.v[i]; })
+        .map(function (s) { return { label: s.name, value: opt.fmt(s.v[i]), color: colorOf(s), strong: s.hero }; });
+      tip.show(opt.ctxLabel + " " + CTX[i], rows, x(i), (T + H - B) / 2);
+    };
+    hit.addEventListener("pointermove", function (ev) {
+      var r = box.getBoundingClientRect(), px = (ev.clientX - r.left) * (W / r.width), best = 0;
+      CTX.forEach(function (_, i) { if (Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i; });
+      at(best);
+    });
+    hit.addEventListener("keydown", function (ev) {
+      if (ev.key === "ArrowRight") { focusI = Math.min(CTX.length - 1, focusI + 1); at(focusI); ev.preventDefault(); }
+      if (ev.key === "ArrowLeft") { focusI = Math.max(0, focusI - 1); at(focusI); ev.preventDefault(); }
+    });
+    hit.addEventListener("focus", function () { at(focusI); });
+    var off = function () { tip.hide(); cross.setAttribute("opacity", 0); };
+    hit.addEventListener("pointerleave", off); hit.addEventListener("blur", off);
+  }
+  function drawLong() {
+    drawLines($("lc-speed"), LC_SPEED, { lo: 1.0, hi: 1.7, step: 0.1, fmt: function (v) { return v.toFixed(2) + "×"; }, label: "Speedup vs context length", ctxLabel: "Context", desc: true });
+    drawLines($("lc-mem"), LC_MEM, { lo: 0, hi: 35, step: 5, fmt: function (v) { return v.toFixed(1); }, label: "Peak GPU memory vs context length", ctxLabel: "Context", desc: false });
+  }
+  (function () {
+    var tb = h("table"), tr = h("tr"); tr.appendChild(h("th", null, "")); CTX.forEach(function (c) { tr.appendChild(h("th", null, c)); });
+    var th = h("thead"); th.appendChild(tr); tb.appendChild(th); var tbody = h("tbody");
+    [["Speedup", LC_SPEED, function (v) { return v.toFixed(2) + "×"; }], ["Peak memory (GiB)", LC_MEM, function (v) { return v.toFixed(1); }]].forEach(function (grp) {
+      var hr = h("tr"); var c = h("th", null, grp[0]); c.colSpan = 5; c.style.textAlign = "left"; hr.appendChild(c); tbody.appendChild(hr);
+      grp[1].forEach(function (s) { var r = h("tr", s.hero ? "ours" : null); r.appendChild(h("td", "name", s.name)); s.v.forEach(function (v) { r.appendChild(h("td", null, grp[2](v))); }); tbody.appendChild(r); });
+    });
+    tb.appendChild(tbody); $("lc-table").appendChild(tb);
+  })();
+
+  /* ---------- acceptance heatmap ---------- */
+  var RAMP = ["--h1", "--h2", "--h3", "--h4", "--h5", "--h6"];
+  function inkOn(token) {   // white or dark ink, whichever contrasts with the cell's actual fill in the current theme
+    var hex = getComputedStyle(document.documentElement).getPropertyValue(token).trim().replace("#", "");
+    if (hex.length !== 6) return "var(--ink)";
+    var lum = [0, 2, 4].map(function (o) { var c = parseInt(hex.substr(o, 2), 16) / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); });
+    var Y = 0.2126 * lum[0] + 0.7152 * lum[1] + 0.0722 * lum[2];
+    return (1.05 / (Y + 0.05)) >= ((Y + 0.05) / 0.05) ? "#ffffff" : "#0b1220";
+  }
+  var accCur = "bitnest";
+  function drawAcc(mid) {
+    var box = $("acc-hm"); box.innerHTML = ""; var lo = 75, hi = 100;
+    var head = h("div", "hm-row"); head.appendChild(h("span", null, ""));
+    WL.concat(["Avg."]).forEach(function (w) { head.appendChild(h("span", "c", w)); }); box.appendChild(head);
+    ACC[mid].rows.forEach(function (row) {
+      var r = h("div", "hm-row"); r.appendChild(h("span", null, row[0] + " · " + row[1]));
+      row[2].concat([row[3]]).forEach(function (v, i) {
+        var c = h("div", "cell" + (i === 6 ? " avg" : ""), v.toFixed(1)); c.tabIndex = 0;
+        var idx = Math.max(0, Math.min(5, Math.floor((v - lo) / (hi - lo) * 6)));
+        if (i < 6) { c.style.background = "var(" + RAMP[idx] + ")"; c.style.color = inkOn(RAMP[idx]); }
+        c.title = ACC[mid].name + ", " + row[0] + ", " + (i < 6 ? WL[i] : "average") + ": " + v.toFixed(1) + "% accepted";
+        c.setAttribute("aria-label", c.title); r.appendChild(c);
+      });
+      box.appendChild(r);
+    });
+    $("acc-lo").textContent = "≤" + lo + "%"; $("acc-hi").textContent = hi + "%";
+  }
+  segButtons($("acc-methods"), METHODS.map(function (m) { return [m.id, m.name]; }), "bitnest", function (k) { accCur = k; drawAcc(k); }); drawAcc("bitnest");
+  try {
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () { drawAcc(accCur); });
+    new MutationObserver(function () { drawAcc(accCur); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  } catch (e) {}
+
+  /* ---------- edge table ---------- */
+  (function () {
+    var tb = h("table"), tr = h("tr");
+    ["Model", "Device", "Method", "Throughput (tok/s)", "Speedup", "Energy (J/token)"].forEach(function (c) { tr.appendChild(h("th", null, c)); });
+    var th = h("thead"); th.appendChild(tr); tb.appendChild(th); var tbody = h("tbody");
+    EDGE.forEach(function (grp) {
+      grp[2].forEach(function (row, i) {
+        var r = h("tr", row[0] === "BitNest" ? "ours" : null);
+        r.appendChild(h("td", "name", i ? "" : grp[0])); r.appendChild(h("td", "name", i ? "" : grp[1])); r.appendChild(h("td", "name", row[0]));
+        row.slice(1).forEach(function (v) { r.appendChild(h("td", null, v)); }); tbody.appendChild(r);
+      });
+    });
+    tb.appendChild(tbody); $("edge-table").appendChild(tb);
+  })();
+
+  var redraw = function () { drawSpeed(); drawLong(); };
+  redraw();
+  var rt = null;
+  if (window.ResizeObserver) new ResizeObserver(function () { clearTimeout(rt); rt = setTimeout(redraw, 120); }).observe($("sp-chart").parentNode);
+  else window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(redraw, 120); });
+})();
+
+/* ===================== recorded replay ===================== */
 (function () {
   var D = JSON.parse(document.getElementById("trace").textContent);
   var G = D.gamma, cur = 0, speed = 1, raf = null, t0 = 0;
@@ -285,65 +715,39 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
   $("g").textContent = G;
   $("env").textContent = "Recorded on one " + D.gpu + " with " + D.source_model + ", batch 1, greedy decoding, PyTorch " + D.torch.split("+")[0] +
     ". Both lanes use the same engine (CUDA graphs, Triton attention). Small wording differences between the lanes come from the 8-bit target versus the 16-bit model.";
-
-  // byte diagram cells
-  (function () {
-    var g = $("cells"), bits = [1,0,1,1, 0,1,1,0], ns = "http://www.w3.org/2000/svg";
-    for (var i = 0; i < 8; i++) {
-      var r = document.createElementNS(ns, "rect");
-      r.setAttribute("x", 20 + i * 54); r.setAttribute("y", 44); r.setAttribute("width", 48); r.setAttribute("height", 52); r.setAttribute("rx", 6);
-      r.setAttribute("fill", i < 4 ? "var(--draft)" : "var(--target)"); r.setAttribute("opacity", i < 4 ? "1" : "0.85"); g.appendChild(r);
-      var t = document.createElementNS(ns, "text");
-      t.setAttribute("x", 44 + i * 54); t.setAttribute("y", 76); t.setAttribute("text-anchor", "middle"); t.setAttribute("style", "fill:#fff;font-size:16px;font-weight:600");
-      t.textContent = bits[i]; g.appendChild(t);
-    }
-  })();
-
   function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
-
-  // per-token kinds for the BitNest lane: first token comes from prefill (target); in each round the first `accepted`
-  // tokens are accepted drafts, the next one is the target's own
+  // per-token kinds for the BitNest lane: the first token comes from prefill (target); in each round the first `accepted`
+  // tokens are accepted drafts and the next one is the target's own
   function kinds(ex) {
     var k = ["t"];
     ex.bitnest.rounds.forEach(function (r) { r.tokens.forEach(function (_, j) { k.push(j < r.accepted ? "d" : "t"); }); });
     return k.slice(0, ex.bitnest.pieces.length);
   }
-
   function buildTabs() {
     var tabs = $("tabs");
     D.examples.forEach(function (ex, i) {
       var b = document.createElement("button");
-      b.type = "button"; b.className = "tab"; b.id = "tab-" + ex.id; b.setAttribute("role", "tab");
-      b.textContent = ex.title; b.setAttribute("aria-selected", i === cur ? "true" : "false");
+      b.type = "button"; b.id = "tab-" + ex.id; b.textContent = ex.title; b.setAttribute("aria-pressed", i === cur ? "true" : "false");
       b.addEventListener("click", function () { select(i); });
       tabs.appendChild(b);
     });
   }
-
   function buildRounds(ex) {
     var box = $("rounds"); box.innerHTML = "";
     ex.bitnest.rounds.forEach(function (r) {
-      var el = document.createElement("div"); el.className = "round"; el.style.setProperty("--g", G);
-      for (var j = 0; j < G; j++) { var c = document.createElement("i"); c.className = j < r.accepted ? "a" : "x"; el.appendChild(c); }
-      var t = document.createElement("i"); t.className = "t"; el.appendChild(t);
-      box.appendChild(el);
+      var e = document.createElement("div"); e.className = "round"; e.style.setProperty("--g", G);
+      for (var j = 0; j < G; j++) { var c = document.createElement("i"); c.className = j < r.accepted ? "a" : "x"; e.appendChild(c); }
+      var t = document.createElement("i"); t.className = "t"; e.appendChild(t); box.appendChild(e);
     });
   }
-
   function fmtS(s) { return s.toFixed(2) + " s"; }
-
-  function render(ex, ms) {
-    // ms: elapsed wall time since the request, in ms of the recording (null = finished state)
-    var lanes = [["fp", ex.fp16, null], ["bn", ex.bitnest, kinds(ex)]];
-    lanes.forEach(function (L) {
+  function render(ex, ms) {   // ms: elapsed recording time since the request (null = finished state)
+    [["fp", ex.fp16, null], ["bn", ex.bitnest, kinds(ex)]].forEach(function (L) {
       var id = L[0], d = L[1], kd = L[2], pre = d.prefill_s * 1000, n = d.pieces.length;
       var tEnd = pre + d.times[n - 1] * 1000, t = ms === null ? tEnd : Math.min(ms, tEnd), shown = 0;
       while (shown < n && pre + d.times[shown] * 1000 <= t) shown++;
       var html = "";
-      for (var i = 0; i < shown; i++) {
-        var p = esc(d.pieces[i]);
-        html += kd ? '<span class="' + kd[i] + '">' + p + "</span>" : p;
-      }
+      for (var i = 0; i < shown; i++) { var p = esc(d.pieces[i]); html += kd ? '<span class="' + kd[i] + '">' + p + "</span>" : p; }
       if (shown === 0) html = '<span class="wait">prefill · ' + (t / 1000).toFixed(2) + " s</span>";
       var out = $(id + "-out"), stick = out.scrollTop + out.clientHeight >= out.scrollHeight - 24;
       out.innerHTML = html;
@@ -356,30 +760,22 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
     var rs = $("rounds").children, bpre = ex.bitnest.prefill_s * 1000;
     for (var r = 0; r < rs.length; r++) rs[r].classList.toggle("on", ms === null || bpre + ex.bitnest.rounds[r].t * 1000 <= ms);
   }
-
   function summary(ex) {
     var f = ex.fp16, b = ex.bitnest;
     var fEnd = f.prefill_s + f.times[f.times.length - 1], bEnd = b.prefill_s + b.times[b.times.length - 1];
-    var items = [
-      [(b.tok_s / f.tok_s).toFixed(2) + "×", "decode speedup over FP16"],
-      [(fEnd / bEnd).toFixed(2) + "×", "end-to-end, prefill included"],
-      [(100 * b.accept).toFixed(1) + "%", "draft tokens accepted"],
-      [fmtS(bEnd) + " / " + fmtS(fEnd), "BitNest / FP16 time to last token"]
-    ];
+    var items = [[(b.tok_s / f.tok_s).toFixed(2) + "×", "decode speedup over FP16"], [(fEnd / bEnd).toFixed(2) + "×", "end-to-end, prefill included"],
+                 [(100 * b.accept).toFixed(1) + "%", "draft tokens accepted"], [fmtS(bEnd) + " / " + fmtS(fEnd), "BitNest / FP16 time to last token"]];
     $("summary").innerHTML = items.map(function (it) { return '<div class="stat"><b>' + it[0] + "</b><span>" + it[1] + "</span></div>"; }).join("");
   }
-
   function stop() { if (raf) cancelAnimationFrame(raf); raf = null; $("play").textContent = "Replay in real time"; }
-
   function select(i) {
     stop(); cur = i;
-    Array.prototype.forEach.call($("tabs").children, function (b, j) { b.setAttribute("aria-selected", j === i ? "true" : "false"); });
+    Array.prototype.forEach.call($("tabs").children, function (b, j) { b.setAttribute("aria-pressed", j === i ? "true" : "false"); });
     var ex = D.examples[i];
     $("prompt").innerHTML = (ex.id === "math" ? "<b>[4 solved examples omitted]</b>\n" : "") + esc(ex.prompt);
     buildRounds(ex); summary(ex); render(ex, null);
     $("fp-out").scrollTop = 0; $("bn-out").scrollTop = 0;
   }
-
   function play() {
     if (raf) { stop(); render(D.examples[cur], null); return; }
     var ex = D.examples[cur];
@@ -387,13 +783,11 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
     $("fp-out").scrollTop = 0; $("bn-out").scrollTop = 0;
     $("play").textContent = "Stop"; t0 = performance.now();
     var tick = function (now) {
-      var ms = (now - t0) * speed;
-      render(ex, Math.min(ms, end));
+      var ms = (now - t0) * speed; render(ex, Math.min(ms, end));
       if (ms < end) raf = requestAnimationFrame(tick); else { raf = null; $("play").textContent = "Replay in real time"; }
     };
     raf = requestAnimationFrame(tick);
   }
-
   $("play").addEventListener("click", play);
   ["sp1", "sp05", "sp025"].forEach(function (id) {
     $(id).addEventListener("click", function () {
@@ -408,7 +802,6 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
     var fallback = function () { var r = document.createRange(); r.selectNodeContents($("bib")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected, press Ctrl+C"; };
     try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
   });
-
   buildTabs(); select(0);
 })();
 </script>
