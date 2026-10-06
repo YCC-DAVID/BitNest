@@ -48,7 +48,9 @@
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: var(--s0); line-height: 1.6; }
 .wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 0 72px; }
-.col { max-width: 68ch; display: grid; gap: 10px; }
+.col { display: grid; gap: 10px; justify-items: center; text-align: center; }
+.col p { max-width: 100%; }
+.col p.justify { text-align: justify; text-align-last: center; }
 a { color: var(--draft); text-underline-offset: 3px; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.15; margin: 0; }
@@ -61,16 +63,16 @@ section { display: grid; gap: 18px; padding-block: 56px 0; }
 .note { font-size: 0.875rem; color: var(--muted); }
 
 /* ---------- header */
-header { display: grid; gap: 22px; padding-block: 56px 8px; }
-.title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 28px; }
+header { display: grid; gap: 22px; padding-block: 56px 8px; justify-items: center; text-align: center; }
+.title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 18px 28px; }
 h1 { font-size: var(--s4); font-weight: 800; letter-spacing: -0.02em; }
 .byte { display: inline-grid; grid-template-columns: repeat(8, 1fr); gap: 3px; width: 168px; flex: none; }
 .byte span { aspect-ratio: 1; border-radius: 3px; }
 .byte .hi { background: var(--draft); }
 .byte .lo { background: var(--target); opacity: 0.85; }
-.subtitle { font-family: var(--f-display); font-size: var(--s2); font-weight: 500; max-width: 30ch; line-height: 1.25; }
+.subtitle { font-family: var(--f-display); font-size: var(--s2); font-weight: 500; max-width: 48ch; line-height: 1.25; }
 .authors { color: var(--muted); max-width: 90ch; }
-.links { display: flex; flex-wrap: wrap; gap: 10px; }
+.links { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .btn { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-display); font-weight: 700; font-size: 0.9375rem;
   padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; cursor: pointer; }
 .btn:hover { border-color: var(--ink); }
@@ -93,7 +95,8 @@ h1 { font-size: var(--s4); font-weight: 800; letter-spacing: -0.02em; }
 .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 @media (max-width: 760px) { .lanes { grid-template-columns: 1fr; } }
 .lane { display: grid; grid-template-rows: auto auto 1fr; gap: 10px; min-width: 0; }
-.lane-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.lane-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 6px 12px; }
+@media (max-width: 760px) { .lane-head { grid-template-columns: 1fr; } .lane-head .meter { text-align: left; } }
 .lane-name { font-family: var(--f-display); font-weight: 700; }
 .lane-name small { display: block; font-weight: 500; color: var(--muted); font-size: 0.8125rem; }
 .meter { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; font-size: 0.8125rem; color: var(--muted); }
@@ -123,22 +126,22 @@ h1 { font-size: var(--s4); font-weight: 800; letter-spacing: -0.02em; }
 .stat span { font-size: 0.8125rem; color: var(--muted); font-family: var(--f-display); }
 
 /* ---------- headline numbers */
-.big { display: flex; flex-wrap: wrap; gap: 28px 56px; }
-.big div { display: grid; gap: 4px; }
+.big { display: flex; flex-wrap: wrap; justify-content: center; gap: 28px 72px; text-align: center; }
+.big div { display: grid; gap: 4px; justify-items: center; }
 .big b { font-family: var(--f-display); font-size: var(--s3); font-weight: 800; letter-spacing: -0.01em; }
-.big span { color: var(--muted); font-size: 0.9375rem; max-width: 26ch; }
+.big span { color: var(--muted); font-size: 0.9375rem; max-width: 30ch; }
 
 /* ---------- paper figures */
 figure { margin: 0; display: grid; gap: 12px; }
 .paper { background: #ffffff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; overflow-x: auto; }
 .paper img { display: block; width: 100%; height: auto; min-width: 560px; }
-figcaption { font-size: 0.9375rem; color: var(--muted); max-width: 80ch; }
+figcaption { font-size: 0.9375rem; color: var(--muted); text-align: center; }
 figcaption b { color: var(--ink); font-family: var(--f-display); }
 .fig-pair { display: grid; gap: 28px; }
-.fig-pair .narrow { max-width: 860px; }
+.fig-pair .narrow { max-width: 860px; justify-self: center; width: 100%; }
 .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 @media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
-.step { display: grid; gap: 8px; align-content: start; }
+.step { display: grid; gap: 8px; align-content: start; justify-items: center; text-align: center; }
 .step .n { font-family: var(--f-mono); font-size: 0.8125rem; color: var(--draft); }
 .eq { font-family: var(--f-mono); font-size: 0.875rem; background: var(--bg); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: nowrap; }
 
@@ -249,7 +252,7 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
         </div>
         <div class="lane bn">
           <div class="lane-head">
-            <div class="lane-name">BitNest<small>W4A8 draft, γ = <span id="g"></span>, verified by the W8A8 target</small></div>
+            <div class="lane-name">BitNest<small>W4A8 draft (γ = <span id="g"></span>) → W8A8 verify</small></div>
             <div class="meter"><strong id="bn-rate">–</strong><span id="bn-clock">tok/s</span></div>
           </div>
           <div class="track"><i id="bn-bar"></i></div>
@@ -275,7 +278,7 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
     <div class="col">
       <p class="label">Abstract</p>
       <h2 id="abs-h">A draft model that lives inside the target's weights</h2>
-      <p>Speculative decoding needs a cheap draft model, and keeping a separate one costs memory. BitNest embeds a low-precision
+      <p class="justify">Speculative decoding needs a cheap draft model, and keeping a separate one costs memory. BitNest embeds a low-precision
         draft inside the higher-precision target weights. A single 8-bit tensor serves both: the target reads all 8 bits, the
         draft reads only the high 4 bits. Rather than truncating an 8-bit model, BitNest first builds a strong low-precision
         foundation and then recovers the higher precision through a residual refinement. The same nesting extends to the KV

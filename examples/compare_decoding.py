@@ -22,20 +22,21 @@ import bitnest.generate as R  # noqa: E402
 GSM8K_SHOTS = 4
 
 
-def builtin_examples():
-    """Three prompts from public benchmarks: GSM8K (math), HumanEval (code), ShareGPT-style chat."""
+def builtin_examples(gsm8k_idx=11, humaneval_idx=156, chat_tokens=160):
+    """Three prompts: GSM8K (math), HumanEval (code), and a chat question (cut after chat_tokens tokens).
+    The default problems have reference solutions of ~150 tokens, i.e. a few seconds of FP16 decoding."""
     import datasets
     gs = datasets.load_dataset("gsm8k", "main")
     shots = "".join(f"Question: {s['question']}\nAnswer: {s['answer']}\n\n" for s in gs["train"].select(range(GSM8K_SHOTS)))
-    q = gs["test"][1]["question"]
-    he = datasets.load_dataset("openai/openai_humaneval")["test"][0]
+    q = gs["test"][gsm8k_idx]["question"]
+    he = datasets.load_dataset("openai/openai_humaneval")["test"][humaneval_idx]
     chat = ("A conversation between a curious user and a helpful, knowledgeable assistant.\n\n"
             "User: Why does speculative decoding make LLM inference faster without changing the output?\n"
             "Assistant:")
     return [
         dict(id="math", title="Math word problem (GSM8K, 4-shot)", context=shots, shown=f"Question: {q}\nAnswer:", stop="\n\nQuestion:"),
         dict(id="code", title="Code completion (HumanEval)", context="", shown=he["prompt"], stop="\ndef "),
-        dict(id="chat", title="Chat", context="", shown=chat, stop="\nUser:"),
+        dict(id="chat", title="Chat", context="", shown=chat, stop="\nUser:", max=chat_tokens),
     ]
 
 
@@ -80,13 +81,14 @@ def timed_spec(model, ids, gen, gamma, ctx):
 
 
 def cut(tok, toks, stop):
-    """Number of whole generated tokens that end before the first occurrence of the stop string."""
+    """Number of generated tokens up to the first occurrence of the stop string (a token that straddles the stop
+    position, e.g. "()\n\n", is kept)."""
     idx = tok.decode(toks, skip_special_tokens=True).find(stop) if stop else -1
     if idx < 0:
         return len(toks)
     for n in range(1, len(toks) + 1):
-        if len(tok.decode(toks[:n], skip_special_tokens=True)) > idx:
-            return n - 1
+        if len(tok.decode(toks[:n], skip_special_tokens=True)) >= idx:
+            return n
     return len(toks)
 
 
@@ -96,12 +98,14 @@ def main():
     p.add_argument("--prompt", default=None, help="custom prompt (default: the three built-in examples)")
     p.add_argument("--gen", type=int, default=192); p.add_argument("--gamma", type=int, default=None)
     p.add_argument("--repeats", type=int, default=3, help="timed runs per path; the median run is kept")
+    p.add_argument("--gsm8k_idx", type=int, default=11); p.add_argument("--humaneval_idx", type=int, default=156)
+    p.add_argument("--chat_tokens", type=int, default=160, help="the chat example is cut after this many tokens")
     p.add_argument("--out", default=None)
     a = p.parse_args(); torch.set_grad_enabled(False)
     from transformers import AutoTokenizer, AutoModelForCausalLM
     meta = json.load(open(f"{a.pkg}/meta.json")); tok = AutoTokenizer.from_pretrained(a.pkg)
     gamma = a.gamma or {"llama2": 4, "llama2_32k": 4, "llama3.2_3b": 4}.get(meta["model"], 3)
-    ex = [dict(id="custom", title="Custom prompt", context="", shown=a.prompt, stop=None)] if a.prompt else builtin_examples()
+    ex = [dict(id="custom", title="Custom prompt", context="", shown=a.prompt, stop=None)] if a.prompt else builtin_examples(a.gsm8k_idx, a.humaneval_idx, a.chat_tokens)
     for e in ex:
         e["ids"] = torch.tensor(encode(tok, e["context"] + e["shown"]))[None].cuda()
     Pmax = max(e["ids"].shape[1] for e in ex)
@@ -134,6 +138,8 @@ def main():
     for e in ex:
         f_t, f_times, f_pre = e["fp16"]; w_t, w_times, w_pre = e["w8a8"]; s_t, s_times, s_pre, rounds = e["spec"]
         nf, ns = cut(tok, f_t, e["stop"]), cut(tok, s_t, e["stop"])
+        if e.get("max"):
+            nf, ns = min(nf, e["max"]), min(ns, e["max"])
         rr = []; n = 0
         for r in rounds:
             if n >= ns:
@@ -146,7 +152,7 @@ def main():
                    w8a8=dict(tok_s=tps(w_t, w_times, cut(tok, w_t, e["stop"])), prefill_s=w_pre, identical_to_spec=w_t[:ns] == s_t[:ns]),
                    bitnest=dict(text=tok.decode(s_t[:ns], skip_special_tokens=True), pieces=[tok.decode([x]) for x in s_t[:ns]],
                                 times=s_times[:ns], prefill_s=s_pre, tok_s=tps(s_t, s_times, ns), rounds=rr,
-                                accept=sum(r["accepted"] for r in rounds) / (gamma * len(rounds))))
+                                accept=sum(r["accepted"] for r in rr) / (gamma * max(len(rr), 1))))   # over the rounds shown
         rec["speedup"] = rec["bitnest"]["tok_s"] / rec["fp16"]["tok_s"]
         out["examples"].append(rec)
         print(f"\n=== {e['title']} ({rec['context_tokens']} prompt tokens)\n{e['shown']}")
