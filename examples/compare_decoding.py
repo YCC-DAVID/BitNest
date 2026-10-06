@@ -11,6 +11,7 @@ Usage:
 import argparse
 import json
 import os
+import re
 import sys
 import time
 
@@ -22,7 +23,7 @@ import bitnest.generate as R  # noqa: E402
 GSM8K_SHOTS = 4
 
 
-def builtin_examples(gsm8k_idx=11, humaneval_idx=156, chat_tokens=160):
+def builtin_examples(gsm8k_idx=11, humaneval_idx=156, chat_tokens=136, chat_question="What is the difference between TCP and UDP?"):
     """Three prompts: GSM8K (math), HumanEval (code), and a chat question (cut after chat_tokens tokens).
     The default problems have reference solutions of ~150 tokens, i.e. a few seconds of FP16 decoding."""
     import datasets
@@ -31,8 +32,7 @@ def builtin_examples(gsm8k_idx=11, humaneval_idx=156, chat_tokens=160):
     q = gs["test"][gsm8k_idx]["question"]
     he = datasets.load_dataset("openai/openai_humaneval")["test"][humaneval_idx]
     chat = ("A conversation between a curious user and a helpful, knowledgeable assistant.\n\n"
-            "User: Why does speculative decoding make LLM inference faster without changing the output?\n"
-            "Assistant:")
+            f"User: {chat_question}\nAssistant:")
     return [
         dict(id="math", title="Math word problem (GSM8K, 4-shot)", context=shots, shown=f"Question: {q}\nAnswer:", stop="\n\nQuestion:"),
         dict(id="code", title="Code completion (HumanEval)", context="", shown=he["prompt"], stop="\ndef "),
@@ -81,8 +81,10 @@ def timed_spec(model, ids, gen, gamma, ctx):
 
 
 def cut(tok, toks, stop):
-    """Number of generated tokens up to the first occurrence of the stop string (a token that straddles the stop
-    position, e.g. "()\n\n", is kept)."""
+    """Number of generated tokens up to EOS or the first occurrence of the stop string (a token that straddles the
+    stop position, e.g. "()\n\n", is kept)."""
+    if tok.eos_token_id in toks:   # the benchmark loop ignores EOS; the demo ends the answer there
+        toks = toks[: toks.index(tok.eos_token_id)]
     idx = tok.decode(toks, skip_special_tokens=True).find(stop) if stop else -1
     if idx < 0:
         return len(toks)
@@ -99,26 +101,27 @@ def main():
     p.add_argument("--gen", type=int, default=192); p.add_argument("--gamma", type=int, default=None)
     p.add_argument("--repeats", type=int, default=3, help="timed runs per path; the median run is kept")
     p.add_argument("--gsm8k_idx", type=int, default=11); p.add_argument("--humaneval_idx", type=int, default=156)
-    p.add_argument("--chat_tokens", type=int, default=160, help="the chat example is cut after this many tokens")
+    p.add_argument("--chat_tokens", type=int, default=136, help="the chat example is cut at the last sentence end within this many tokens")
+    p.add_argument("--chat_question", default="What is the difference between TCP and UDP?")
     p.add_argument("--out", default=None)
     a = p.parse_args(); torch.set_grad_enabled(False)
     from transformers import AutoTokenizer, AutoModelForCausalLM
     meta = json.load(open(f"{a.pkg}/meta.json")); tok = AutoTokenizer.from_pretrained(a.pkg)
     gamma = a.gamma or {"llama2": 4, "llama2_32k": 4, "llama3.2_3b": 4}.get(meta["model"], 3)
-    ex = [dict(id="custom", title="Custom prompt", context="", shown=a.prompt, stop=None)] if a.prompt else builtin_examples(a.gsm8k_idx, a.humaneval_idx, a.chat_tokens)
+    ex = [dict(id="custom", title="Custom prompt", context="", shown=a.prompt, stop=None)] if a.prompt else builtin_examples(a.gsm8k_idx, a.humaneval_idx, a.chat_tokens, a.chat_question)
     for e in ex:
         e["ids"] = torch.tensor(encode(tok, e["context"] + e["shown"]))[None].cuda()
-    Pmax = max(e["ids"].shape[1] for e in ex)
     pick = lambda runs: sorted(runs, key=lambda r: r[1][-1])[len(runs) // 2]  # noqa: E731  median by total decode time
 
     from bitnest.attention import install_hf_stock, install_stock_wrapper
     # ---- FP16 autoregressive (original weights)
     m16 = AutoModelForCausalLM.from_pretrained(a.fp16_model or meta["source_model"], torch_dtype=torch.bfloat16, attn_implementation=install_hf_stock(),
                                                device_map="cuda", low_cpu_mem_usage=True).eval()
-    c16 = R.build_ctx(m16, Pmax, a.gen, gamma, ("step1",)); timed_ar(m16, ex[0]["ids"], 16, c16)
-    for e in ex:
+    for e in ex:   # cache and graphs sized per prompt (the cache length changes the attention split and thus rounding)
+        c16 = R.build_ctx(m16, e["ids"].shape[1], a.gen, gamma, ("step1",)); timed_ar(m16, e["ids"], 16, c16)
         e["fp16"] = pick([timed_ar(m16, e["ids"], a.gen, c16) for _ in range(a.repeats)])
-    del m16, c16; torch.cuda.empty_cache()
+        del c16; torch.cuda.empty_cache()
+    del m16; torch.cuda.empty_cache()
 
     # ---- BitNest: W4A8 draft + W8A8 target from one nested weight tensor, nested KV4/KV8 cache
     impl = install_stock_wrapper()
@@ -127,19 +130,26 @@ def main():
     model, _, _ = cold_load(a.pkg, impl, DualPlaneLinear=R.DualPlaneLinear)
     R.KVP.update(on=True, offsets=True, r3=True); A.MODE_REF["get"] = lambda: R.MODE["m"]; A.DRAFT_LO["mode"] = False
     R.calibrate_kernels(model, gamma)
-    ctx = R.build_ctx(model, Pmax, a.gen, gamma, ("step1", "draft1", "verifyG"))
-    timed_ar(model, ex[0]["ids"], 16, ctx); timed_spec(model, ex[0]["ids"], 16, gamma, ctx)
     for e in ex:
+        ctx = R.build_ctx(model, e["ids"].shape[1], a.gen, gamma, ("step1", "draft1", "verifyG"))
+        timed_ar(model, e["ids"], 16, ctx); timed_spec(model, e["ids"], 16, gamma, ctx)
         e["w8a8"] = pick([timed_ar(model, e["ids"], a.gen, ctx) for _ in range(a.repeats)])
         e["spec"] = pick([timed_spec(model, e["ids"], a.gen, gamma, ctx) for _ in range(a.repeats)])
+        del ctx; torch.cuda.empty_cache()
 
     out = dict(model=meta["model"], source_model=meta["source_model"], gamma=gamma, gen=a.gen,
                gpu=torch.cuda.get_device_name(0), torch=torch.__version__, examples=[])
     for e in ex:
         f_t, f_times, f_pre = e["fp16"]; w_t, w_times, w_pre = e["w8a8"]; s_t, s_times, s_pre, rounds = e["spec"]
         nf, ns = cut(tok, f_t, e["stop"]), cut(tok, s_t, e["stop"])
-        if e.get("max"):
-            nf, ns = min(nf, e["max"]), min(ns, e["max"])
+        if e.get("max"):   # cut both lanes at the same sentence end at or before `max` tokens
+            n = min(nf, ns, e["max"])
+            def clean_end(k):   # ends a sentence, and is not a dangling list number such as "\n\n3."
+                txt = tok.decode(s_t[:k], skip_special_tokens=True).rstrip()
+                return txt.endswith((".", ":")) and not re.search(r"(^|\n)\s*\d+\.$", txt)
+            while n > 1 and not (s_t[:n] == f_t[:n] and clean_end(n)):
+                n -= 1
+            nf = ns = n if n > 1 else min(nf, ns, e["max"])
         rr = []; n = 0
         for r in rounds:
             if n >= ns:

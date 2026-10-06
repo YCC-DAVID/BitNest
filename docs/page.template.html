@@ -168,6 +168,9 @@ figcaption b { color: var(--ink); font-family: var(--f-display); }
 .keys { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--f-display); font-size: 0.8125rem; color: var(--muted); }
 .keys span { display: inline-flex; align-items: center; gap: 6px; }
 .keys svg { flex: none; }
+.keybtn { display: inline-flex; align-items: center; gap: 6px; font: inherit; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.keybtn[aria-pressed="false"] { opacity: 0.45; }
+.keybtn:disabled { cursor: default; }
 .chart-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 @media (max-width: 900px) { .chart-pair { grid-template-columns: 1fr; } }
 details summary { cursor: pointer; font-family: var(--f-display); font-weight: 700; font-size: 0.875rem; color: var(--muted); }
@@ -340,7 +343,7 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
     <div class="card">
       <div class="chart-head">
         <div class="t"><h3>End-to-end decoding speedup across six workloads</h3>
-          <p class="note">Speedup over 16-bit autoregressive decoding. Hover a row for every method's value.</p></div>
+          <p class="note">Speedup over 16-bit autoregressive decoding (1.0× ring). Hover an axis for every method's value.</p></div>
         <div class="seg" id="sp-models" role="group" aria-label="Model"></div>
       </div>
       <div class="keys" id="sp-keys"></div>
@@ -352,10 +355,12 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
     <div class="card">
       <div class="chart-head">
         <div class="t"><h3>Quality of the target model</h3>
-          <p class="note">GSM8K accuracy (%, higher is better); all other columns are perplexity (lower is better). Small numbers show the change from FP16.</p></div>
+          <p class="note">Loss relative to FP16: perplexity increase for the five language-modeling sets, relative accuracy drop for GSM8K. 0% is FP16 quality; shorter is better. Click a legend entry to hide it and rescale.</p></div>
         <div class="seg" id="q-models" role="group" aria-label="Model"></div>
       </div>
-      <div class="tbl" id="q-table"></div>
+      <div class="keys" id="q-keys"></div>
+      <div class="chart" id="q-chart"></div>
+      <details><summary>Show table</summary><div class="tbl" id="q-table"></div></details>
       <p class="note">QSpec uses a W4A16 target and is evaluated with its own inference engine.</p>
     </div>
 
@@ -515,47 +520,71 @@ var EDGE = [
   }
   function niceTicks(lo, hi, step) { var out = []; for (var v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(4)); return out; }
 
-  /* ---------- speedup dot plot ---------- */
-  var spModel = "llama2";
+  /* ---------- speedup radar ---------- */
+  var spModel = "llama2", spHidden = {};
   function drawSpeed() {
     var box = $("sp-chart"); box.innerHTML = "";
-    var data = SPEED[spModel], W = Math.max(320, box.clientWidth), narrow = W < 560;
-    var L = narrow ? 76 : 96, R = 56, T = 8, rowH = 44, B = 30, H = T + rowH * WL.length + B;
-    var lo = 0.9, hi = 1.7, x = function (v) { return L + (v - lo) / (hi - lo) * (W - L - R); };
-    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Speedup per workload for " + spModel }, box);
-    niceTicks(lo, hi, narrow ? 0.2 : 0.1).forEach(function (v) {
-      el("line", { x1: x(v), x2: x(v), y1: T, y2: T + rowH * WL.length, class: "gridline", style: v === 1 ? "stroke:var(--line)" : "" }, svg);
-      var t = el("text", { x: x(v), y: H - 10, "text-anchor": "middle" }, svg); t.textContent = v.toFixed(1) + "×";
+    var data = SPEED[spModel], W = Math.max(300, box.clientWidth), S = Math.min(W, 620), narrow = W < 520;
+    var H = S * (narrow ? 0.92 : 0.86), cx = W / 2, cy = H / 2 + 4, Rmax = Math.min(S / 2 - (narrow ? 44 : 70), H / 2 - 30);
+    var lo = 0.9, hi = 1.7, rr = function (v) { return (v - lo) / (hi - lo) * Rmax; };
+    var ang = function (i) { return -Math.PI / 2 + i * 2 * Math.PI / WL.length; };
+    var pt = function (i, v) { return [cx + Math.cos(ang(i)) * rr(v), cy + Math.sin(ang(i)) * rr(v)]; };
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Speedup radar for " + spModel }, box);
+    // rings (polygonal, like the paper) and spokes
+    [1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7].forEach(function (v) {
+      var d = WL.map(function (_, i) { var p = pt(i, v); return (i ? "L" : "M") + p[0] + " " + p[1]; }).join(" ") + "Z";
+      el("path", { d: d, fill: "none", class: "gridline", style: v === 1.0 ? "stroke:var(--line)" : "" }, svg);
+      if (Math.round(v * 10) % 2 === 0) {   // ring labels between the first two axes, clear of the data labels
+        var a = (ang(0) + ang(1)) / 2, rad = rr(v) * Math.cos(Math.PI / WL.length);
+        var t = el("text", { x: cx + Math.cos(a) * rad + 3, y: cy + Math.sin(a) * rad - 2, style: "font-size:11px" }, svg); t.textContent = v.toFixed(1) + "×";
+      }
     });
-    var tip = tipFor(box);
-    var present = METHODS.filter(function (m) { return data[m.id]; });
-    WL.forEach(function (w, i) {
-      var cy = T + rowH * i + rowH / 2;
-      var g = el("g", { class: "row", tabindex: 0, "aria-label": w + ": " + present.map(function (m) { return m.name + " " + data[m.id][i].toFixed(2) + "×"; }).join(", ") }, svg);
-      el("rect", { x: 0, y: cy - rowH / 2 + 2, width: W, height: rowH - 4, rx: 6, class: "hl" }, g);
-      var lbl = el("text", { x: 4, y: cy + 4, class: "rowlabel" }, g); lbl.textContent = w;
-      var vals = present.map(function (m) { return data[m.id][i]; });
-      el("line", { x1: x(Math.min.apply(null, vals)), x2: x(Math.max.apply(null, vals)), y1: cy, y2: cy, stroke: "var(--line)", "stroke-width": 2 }, g);
-      present.slice().reverse().forEach(function (m) {   // BitNest drawn last (on top)
-        var v = data[m.id][i];
-        shape(g, m.shape, x(v), cy, m.hero ? 7 : 5.5, m.hero ? "var(--mark-hero)" : "var(--mark-base)");
+    var spokes = WL.map(function (w, i) {
+      var p = pt(i, hi);
+      var s = el("line", { x1: cx, y1: cy, x2: p[0], y2: p[1], class: "gridline" }, svg);
+      var q = [cx + Math.cos(ang(i)) * (Rmax + 18), cy + Math.sin(ang(i)) * (Rmax + 18)];
+      var c = Math.cos(ang(i)), t = el("text", { x: q[0], y: q[1] + 4, class: "rowlabel", "text-anchor": Math.abs(c) < 0.2 ? "middle" : (c > 0 ? "start" : "end") }, svg);
+      t.textContent = w; return s;
+    });
+    var present = METHODS.filter(function (m) { return data[m.id] && !spHidden[m.id]; });
+    present.slice().reverse().forEach(function (m) {   // BitNest drawn last (on top)
+      var v = data[m.id], col = m.hero ? "var(--mark-hero)" : "var(--mark-base)";
+      var d = v.map(function (x, i) { var p = pt(i, x); return (i ? "L" : "M") + p[0] + " " + p[1]; }).join(" ") + "Z";
+      el("path", { d: d, fill: m.hero ? "var(--mark-hero)" : "none", "fill-opacity": m.hero ? 0.12 : 0, stroke: col, "stroke-width": m.hero ? 2.5 : 1.5, "stroke-linejoin": "round" }, svg);
+      v.forEach(function (x, i) { var p = pt(i, x); shape(svg, m.shape, p[0], p[1], m.hero ? 5 : 4.5, col); });
+      if (m.hero && !narrow) v.forEach(function (x, i) {   // direct labels for BitNest only (tooltip/table on phones)
+        var p = pt(i, x), c = Math.cos(ang(i)), s = Math.sin(ang(i));
+        var t = el("text", { x: p[0] + c * 16, y: p[1] + s * 14 + 4, class: "val", "text-anchor": Math.abs(c) < 0.2 ? "middle" : (c > 0 ? "start" : "end") }, svg);
+        t.textContent = x.toFixed(2) + "×";
       });
-      var bv = data.bitnest[i], vt = el("text", { x: x(bv) + 12, y: cy + 4, class: "val" }, g); vt.textContent = bv.toFixed(2) + "×";
-      el("rect", { x: 0, y: cy - rowH / 2, width: W, height: rowH, class: "hit" }, g);
-      var show = function (ev) {
-        var r = box.getBoundingClientRect(), px = ev && ev.clientX != null ? ev.clientX - r.left : x(bv), py = cy;
-        tip.show(w, present.map(function (m) { return { label: m.name, value: data[m.id][i].toFixed(2) + "×", color: m.hero ? "var(--mark-hero)" : "var(--mark-base)", shape: m.shape }; }), px, py);
-      };
-      g.addEventListener("pointermove", show); g.addEventListener("focus", function () { show(null); });
-      g.addEventListener("pointerleave", tip.hide); g.addEventListener("blur", tip.hide);
     });
-    // keys
+    // hover: one wedge per workload axis
+    var tip = tipFor(box);
+    WL.forEach(function (w, i) {
+      var a0 = ang(i) - Math.PI / WL.length, a1 = ang(i) + Math.PI / WL.length, R2 = Rmax + 40;
+      var d = "M" + cx + " " + cy + " L" + (cx + Math.cos(a0) * R2) + " " + (cy + Math.sin(a0) * R2) + " A" + R2 + " " + R2 + " 0 0 1 " + (cx + Math.cos(a1) * R2) + " " + (cy + Math.sin(a1) * R2) + " Z";
+      var all = METHODS.filter(function (m) { return data[m.id]; });
+      var g = el("path", { d: d, class: "hit", tabindex: 0, "aria-label": w + ": " + all.map(function (m) { return m.name + " " + data[m.id][i].toFixed(2) + "×"; }).join(", ") }, svg);
+      var show = function () {
+        spokes[i].setAttribute("style", "stroke:var(--ink);stroke-width:1.5");
+        var p = pt(i, hi);
+        tip.show(w, all.map(function (m) { return { label: m.name, value: data[m.id][i].toFixed(2) + "×", color: m.hero ? "var(--mark-hero)" : "var(--mark-base)", shape: m.shape }; }),
+                 Math.min(Math.max(p[0], 0), W - 40), Math.min(Math.max(p[1], 40), H - 40));
+      };
+      var hide = function () { spokes[i].removeAttribute("style"); tip.hide(); };
+      g.addEventListener("pointerenter", show); g.addEventListener("focus", show); g.addEventListener("pointerleave", hide); g.addEventListener("blur", hide);
+    });
+    // legend = toggles
     var keys = $("sp-keys"); keys.innerHTML = "";
     METHODS.forEach(function (m) {
-      var s = h("span"); s.appendChild(keySvg(m.shape, m.hero ? "var(--mark-hero)" : "var(--mark-base)"));
-      s.appendChild(document.createTextNode(m.name + " · " + m.cfg)); if (!data[m.id]) s.style.opacity = "0.45"; keys.appendChild(s);
+      var b = h("button", "keybtn"); b.type = "button"; var off = !data[m.id];
+      b.appendChild(keySvg(m.shape, m.hero ? "var(--mark-hero)" : "var(--mark-base)"));
+      b.appendChild(document.createTextNode(m.name + " · " + m.cfg + (off ? " · N/A" : "")));
+      b.disabled = off; b.setAttribute("aria-pressed", off || spHidden[m.id] ? "false" : "true");
+      b.addEventListener("click", function () { spHidden[m.id] = !spHidden[m.id]; drawSpeed(); });
+      keys.appendChild(b);
     });
-    $("sp-note").textContent = present.length === 1 ? "QSpec, QuantSpec and Draft & Verify have no official support for Qwen models (N/A in the paper)." : "";
+    $("sp-note").textContent = METHODS.some(function (m) { return !data[m.id]; }) ? "QSpec, QuantSpec and Draft & Verify have no official support for Qwen models (N/A in the paper)." : "Click a legend entry to show or hide a method.";
     // table twin
     var tb = h("table"); var tr = h("tr"); tr.appendChild(h("th", null, "Method")); tr.appendChild(h("th", null, "Draft → Target"));
     WL.forEach(function (w) { tr.appendChild(h("th", null, w)); }); var th = h("thead"); th.appendChild(tr); tb.appendChild(th);
@@ -568,9 +597,62 @@ var EDGE = [
   }
   segButtons($("sp-models"), MODELS, spModel, function (k) { spModel = k; drawSpeed(); });
 
-  /* ---------- quality table ---------- */
-  function drawQuality(model) {
-    var rows = QUALITY[model], fp = rows[0][1], tb = h("table"), tr = h("tr");
+  /* ---------- quality: loss relative to FP16 ---------- */
+  var QSTYLE = { "W8A8": { fill: "var(--grid)", stroke: "var(--mark-base)" }, "QSpec (W4A16)": { fill: "var(--mark-base)", stroke: "none" }, "BitNest": { fill: "var(--mark-hero)", stroke: "none" } };
+  var qModel = "llama2", qHidden = {};
+  function qLoss(ci, v, fp) { return ci === 1 ? (fp - v) / fp * 100 : (v / fp - 1) * 100; }   // GSM8K: relative accuracy drop; PPL: relative increase
+  function drawQuality() {
+    var rows = QUALITY[qModel], fp = rows[0][1], avail = rows.slice(1), meths = avail.filter(function (m) { return !qHidden[m[0]]; });
+    var box = $("q-chart"); box.innerHTML = "";
+    var W = Math.max(300, box.clientWidth), narrow = W < 560, L = narrow ? 84 : 120, R = 64, T = 6, bar = 9, gap = 3;
+    var groupH = meths.length * (bar + gap) + 18, B = 34, H = T + groupH * QCOLS.length + B;
+    var losses = []; meths.forEach(function (m) { m[1].forEach(function (v, ci) { losses.push(qLoss(ci, v, fp[ci])); }); });
+    var lo = Math.min(-1, Math.floor(Math.min.apply(null, losses) / 2) * 2), hi = Math.max(2, Math.ceil(Math.max.apply(null, losses) / 2) * 2);
+    var x = function (v) { return L + (v - lo) / (hi - lo) * (W - L - R); };
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, width: W, height: H, role: "img", "aria-label": "Quality loss relative to FP16" }, box);
+    var span = hi - lo, step = span > 24 ? 5 : span > 10 ? 2 : 1;
+    niceTicks(lo, hi, step).forEach(function (v) {
+      el("line", { x1: x(v), x2: x(v), y1: T, y2: H - B + 4, class: "gridline", style: v === 0 ? "stroke:var(--ink);stroke-width:1.5" : "" }, svg);
+      var t = el("text", { x: x(v), y: H - B + 18, "text-anchor": "middle" }, svg); t.textContent = (v > 0 ? "+" : "") + v + "%";
+    });
+    var cap = el("text", { x: x(0) + 6, y: H - 2, style: "font-size:11px" }, svg); cap.textContent = "worse than FP16 →";
+    var cap2 = el("text", { x: x(0) - 6, y: H - 2, "text-anchor": "end", style: "font-size:11px" }, svg); cap2.textContent = "← better";
+    var tip = tipFor(box);
+    QCOLS.forEach(function (c, ci) {
+      var y0 = T + groupH * ci, g = el("g", { class: "row", tabindex: 0 }, svg);
+      el("rect", { x: 0, y: y0, width: W, height: groupH - 6, rx: 6, class: "hl" }, g);
+      var t = el("text", { x: 4, y: y0 + (groupH - 6) / 2 + 4, class: "rowlabel" }, g); t.textContent = c.replace(" ↓", "").replace(" ↑", "");
+      meths.forEach(function (m, mi) {
+        var v = qLoss(ci, m[1][ci], fp[ci]), st = QSTYLE[m[0]], yb = y0 + 6 + mi * (bar + gap);
+        var x0 = Math.min(x(0), x(v)), w = Math.max(1.5, Math.abs(x(v) - x(0)));
+        el("rect", { x: x0 + (st.stroke !== "none" ? 0.75 : 0), y: yb + (st.stroke !== "none" ? 0.75 : 0), width: Math.max(0.5, w - (st.stroke !== "none" ? 1.5 : 0)), height: bar - (st.stroke !== "none" ? 1.5 : 0), rx: 2,
+                     fill: st.fill, stroke: st.stroke, "stroke-width": st.stroke !== "none" ? 1.5 : 0 }, g);
+        if (m[0] === "BitNest") { var lt = el("text", { x: v >= 0 ? x(v) + 6 : x(v) - 6, y: yb + bar - 1, class: "val", "text-anchor": v >= 0 ? "start" : "end", style: "font-size:11px" }, g); lt.textContent = (v > 0 ? "+" : "") + v.toFixed(2) + "%"; }
+      });
+      g.setAttribute("aria-label", c + ": " + meths.map(function (m) { return m[0] + " " + m[1][ci] + " (" + qLoss(ci, m[1][ci], fp[ci]).toFixed(2) + "% vs FP16 " + fp[ci] + ")"; }).join(", "));
+      el("rect", { x: 0, y: y0, width: W, height: groupH - 6, class: "hit" }, g);
+      var show = function (ev) {
+        var r = box.getBoundingClientRect(), px = ev && ev.clientX != null ? ev.clientX - r.left : x(0);
+        var rowsT = [{ label: "FP16", value: (ci === 1 ? fp[ci].toFixed(1) : fp[ci].toFixed(3)), color: "var(--line)" }].concat(meths.map(function (m) {
+          var lv = qLoss(ci, m[1][ci], fp[ci]);
+          return { label: m[0], value: (ci === 1 ? m[1][ci].toFixed(1) : m[1][ci].toFixed(3)) + "  (" + (lv > 0 ? "+" : "") + lv.toFixed(2) + "%)", color: QSTYLE[m[0]].fill === "none" ? QSTYLE[m[0]].stroke : QSTYLE[m[0]].fill, strong: m[0] === "BitNest" };
+        }));
+        tip.show(c + (ci === 1 ? " accuracy" : " perplexity"), rowsT, px, y0 + groupH / 2);
+      };
+      g.addEventListener("pointermove", show); g.addEventListener("focus", function () { show(null); });
+      g.addEventListener("pointerleave", tip.hide); g.addEventListener("blur", tip.hide);
+    });
+    var keys = $("q-keys"); keys.innerHTML = "";
+    avail.forEach(function (m) {
+      var st = QSTYLE[m[0]], s = h("button", "keybtn"), k = el("svg", { width: 14, height: 14, viewBox: "0 0 14 14", "aria-hidden": "true" });
+      s.type = "button"; s.setAttribute("aria-pressed", qHidden[m[0]] ? "false" : "true");
+      el("rect", { x: 1.5, y: 3.5, width: 11, height: 7, rx: 2, fill: st.fill, stroke: st.stroke, "stroke-width": st.stroke !== "none" ? 1.5 : 0 }, k);
+      s.appendChild(k); s.appendChild(document.createTextNode(m[0] === "W8A8" ? "W8A8 (standalone, no speculation)" : m[0]));
+      s.addEventListener("click", function () { if (!qHidden[m[0]] && meths.length === 1) return; qHidden[m[0]] = !qHidden[m[0]]; drawQuality(); });
+      keys.appendChild(s);
+    });
+    // table twin
+    var tb = h("table"), tr = h("tr");
     tr.appendChild(h("th", null, "Method")); QCOLS.forEach(function (c) { tr.appendChild(h("th", null, c)); });
     var th = h("thead"); th.appendChild(tr); tb.appendChild(th); var tbody = h("tbody");
     rows.forEach(function (row, ri) {
@@ -584,7 +666,7 @@ var EDGE = [
     });
     tb.appendChild(tbody); $("q-table").innerHTML = ""; $("q-table").appendChild(tb);
   }
-  segButtons($("q-models"), MODELS, "llama2", drawQuality); drawQuality("llama2");
+  segButtons($("q-models"), MODELS, qModel, function (k) { qModel = k; drawQuality(); }); drawQuality();
 
   /* ---------- long-context line charts ---------- */
   function drawLines(box, series, opt) {
@@ -703,7 +785,7 @@ var EDGE = [
     tb.appendChild(tbody); $("edge-table").appendChild(tb);
   })();
 
-  var redraw = function () { drawSpeed(); drawLong(); };
+  var redraw = function () { drawSpeed(); drawQuality(); drawLong(); };
   redraw();
   var rt = null;
   if (window.ResizeObserver) new ResizeObserver(function () { clearTimeout(rt); rt = setTimeout(redraw, 120); }).observe($("sp-chart").parentNode);
