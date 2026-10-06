@@ -2,6 +2,8 @@
 
 Code for **[BitNest: Bit-Nested Speculative Decoding for Memory-Efficient LLM Inference Acceleration](https://arxiv.org/abs/2610.02800)**.
 
+[Project page](https://ycc-david.github.io/BitNest/) · [Paper](https://arxiv.org/abs/2610.02800) · [Models](https://huggingface.co/YccHugAi)
+
 BitNest embeds a low-precision draft model *inside* the weights of a higher-precision target model. A single 8-bit
 weight tensor serves both: the **target** reads all 8 bits (W8A8), the **draft** reads only the high 4-bit nibble
 (W4A8). Instead of truncating a W8 model, BitNest first builds a strong low-precision foundation (GPTQ-W4) and recovers
