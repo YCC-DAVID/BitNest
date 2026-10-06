@@ -111,7 +111,8 @@ Long-context tasks: `python bitnest/task_eval.py --pkg release/bitnest_llama2_32
 - **Speculative loop.** γ draft steps (M=1) → one verify step (M=γ+1) over the same positions, which overwrites the draft's KV →
   greedy prefix acceptance. Each step is a captured CUDA graph; draft and target share one cache.
 - **Kernel calibration.** Launch configurations are picked by timing on the real weights before graph capture. Different picks change
-  the fp32 split-K reduction order, so decode-path numbers can vary slightly between runs on deep small models.
+  the fp32 split-K reduction order, so decode-path numbers can vary slightly between runs on deep small models. The first run on
+  a machine JIT-compiles every candidate kernel variant (tens of seconds); later runs hit Triton's cache (`~/.triton/cache`).
 
 ## Citation
 
