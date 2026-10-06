@@ -495,10 +495,11 @@ var EDGE = [
     if (kind === "triangle") return el("path", { d: "M" + x + " " + (y - r * 1.05) + " L" + (x + r * 1.05) + " " + (y + r * 0.8) + " L" + (x - r * 1.05) + " " + (y + r * 0.8) + " Z", fill: fill, stroke: "var(--surface)", "stroke-width": 2, "stroke-linejoin": "round" }, g);
     return el("path", { d: "M" + x + " " + (y - r * 1.1) + " L" + (x + r * 1.1) + " " + y + " L" + x + " " + (y + r * 1.1) + " L" + (x - r * 1.1) + " " + y + " Z", fill: fill, stroke: "var(--surface)", "stroke-width": 2, "stroke-linejoin": "round" }, g);
   }
-  function keySvg(kind, fill, line) {
-    var s = el("svg", { width: line ? 18 : 14, height: 14, viewBox: line ? "0 0 18 14" : "0 0 14 14", "aria-hidden": "true" });
+  function keySvg(kind, fill, line, size) {
+    var z = size || 14;
+    var s = el("svg", { width: line ? 18 : z, height: z, viewBox: line ? "0 0 18 14" : "0 0 " + z + " " + z, "aria-hidden": "true" });
     if (line) el("line", { x1: 1, y1: 7, x2: 17, y2: 7, stroke: fill, "stroke-width": 2, "stroke-linecap": "round" }, s);
-    else shape(s, kind, 7, 7, 4.5, fill);
+    else shape(s, kind, z / 2, z / 2, z * 0.32, fill);
     return s;
   }
   // tooltip shared per chart container
@@ -553,10 +554,10 @@ var EDGE = [
       var v = data[m.id], col = m.color;
       var d = v.map(function (x, i) { var p = pt(i, x); return (i ? "L" : "M") + p[0] + " " + p[1]; }).join(" ") + "Z";
       el("path", { d: d, fill: col, "fill-opacity": m.hero ? 0.12 : 0.04, stroke: col, "stroke-width": m.hero ? 2.5 : 1.75, "stroke-linejoin": "round" }, svg);
-      v.forEach(function (x, i) { var p = pt(i, x); shape(svg, m.shape, p[0], p[1], m.hero ? 5 : 4.5, col); });
+      v.forEach(function (x, i) { var p = pt(i, x); shape(svg, m.shape, p[0], p[1], m.hero ? 7.5 : 6.5, col); });
       if (m.hero && !narrow) v.forEach(function (x, i) {   // direct labels for BitNest only (tooltip/table on phones)
         var p = pt(i, x), c = Math.cos(ang(i)), s = Math.sin(ang(i));
-        var t = el("text", { x: p[0] + c * 16, y: p[1] + s * 14 + 4, class: "val", "text-anchor": Math.abs(c) < 0.2 ? "middle" : (c > 0 ? "start" : "end") }, svg);
+        var t = el("text", { x: p[0] + c * 20, y: p[1] + s * 18 + 4, class: "val", "text-anchor": Math.abs(c) < 0.2 ? "middle" : (c > 0 ? "start" : "end") }, svg);
         t.textContent = x.toFixed(2) + "×";
       });
     });
@@ -580,7 +581,7 @@ var EDGE = [
     var keys = $("sp-keys"); keys.innerHTML = "";
     METHODS.forEach(function (m) {
       var b = h("button", "keybtn"); b.type = "button"; var off = !data[m.id];
-      b.appendChild(keySvg(m.shape, m.color));
+      b.appendChild(keySvg(m.shape, m.color, false, 20));
       b.appendChild(document.createTextNode(m.name + " · " + m.cfg + (off ? " · N/A" : "")));
       b.disabled = off; b.setAttribute("aria-pressed", off || spHidden[m.id] ? "false" : "true");
       b.addEventListener("click", function () { spHidden[m.id] = !spHidden[m.id]; drawSpeed(); });
