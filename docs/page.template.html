@@ -355,7 +355,7 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
     <div class="card">
       <div class="chart-head">
         <div class="t"><h3>Quality of the target model</h3>
-          <p class="note">Loss relative to FP16: perplexity increase for the five language-modeling sets, relative accuracy drop for GSM8K. 0% is FP16 quality; shorter is better. Click a legend entry to hide it and rescale.</p></div>
+          <p class="note">Quality change relative to FP16: lower perplexity counts as better on the five language-modeling sets, higher accuracy on GSM8K. 0% is FP16 quality; bars to the left are worse. Click a legend entry to hide it and rescale.</p></div>
         <div class="seg" id="q-models" role="group" aria-label="Model"></div>
       </div>
       <div class="keys" id="q-keys"></div>
@@ -600,7 +600,7 @@ var EDGE = [
   /* ---------- quality: loss relative to FP16 ---------- */
   var QSTYLE = { "W8A8": { fill: "var(--grid)", stroke: "var(--mark-base)" }, "QSpec (W4A16)": { fill: "var(--mark-base)", stroke: "none" }, "BitNest": { fill: "var(--mark-hero)", stroke: "none" } };
   var qModel = "llama2", qHidden = {};
-  function qLoss(ci, v, fp) { return ci === 1 ? (fp - v) / fp * 100 : (v / fp - 1) * 100; }   // GSM8K: relative accuracy drop; PPL: relative increase
+  function qLoss(ci, v, fp) { return ci === 1 ? (v - fp) / fp * 100 : (1 - v / fp) * 100; }   // quality change vs FP16 (negative = worse): GSM8K relative accuracy change; PPL relative decrease
   function drawQuality() {
     var rows = QUALITY[qModel], fp = rows[0][1], avail = rows.slice(1), meths = avail.filter(function (m) { return !qHidden[m[0]]; });
     var box = $("q-chart"); box.innerHTML = "";
@@ -615,8 +615,8 @@ var EDGE = [
       el("line", { x1: x(v), x2: x(v), y1: T, y2: H - B + 4, class: "gridline", style: v === 0 ? "stroke:var(--ink);stroke-width:1.5" : "" }, svg);
       var t = el("text", { x: x(v), y: H - B + 18, "text-anchor": "middle" }, svg); t.textContent = (v > 0 ? "+" : "") + v + "%";
     });
-    var cap = el("text", { x: x(0) + 6, y: H - 2, style: "font-size:11px" }, svg); cap.textContent = "worse than FP16 →";
-    var cap2 = el("text", { x: x(0) - 6, y: H - 2, "text-anchor": "end", style: "font-size:11px" }, svg); cap2.textContent = "← better";
+    var cap = el("text", { x: x(0) + 6, y: H - 2, style: "font-size:11px" }, svg); cap.textContent = "better than FP16 →";
+    var cap2 = el("text", { x: x(0) - 6, y: H - 2, "text-anchor": "end", style: "font-size:11px" }, svg); cap2.textContent = "← worse";
     var tip = tipFor(box);
     QCOLS.forEach(function (c, ci) {
       var y0 = T + groupH * ci, g = el("g", { class: "row", tabindex: 0 }, svg);
