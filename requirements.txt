@@ -1,0 +1,15 @@
+# Tested with Python 3.10, CUDA 12.8, NVIDIA RTX A6000 / Jetson Orin
+torch==2.10.0
+triton==3.6.0
+transformers==4.49.0
+accelerate==1.4.0
+datasets==2.20.0
+safetensors>=0.4
+sentencepiece
+tensorboardX
+# online Hadamard (R4); without it set BITNEST_HAD_TORCH=1 to use a slower pure-PyTorch fallback
+fast-hadamard-transform==1.1.0
+# evaluation
+lm_eval==0.4.11
+rouge_score
+huggingface_hub
