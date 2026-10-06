@@ -1,9 +1,15 @@
 """Flash-decoding style decode attention (GQA-grouped): one program handles one KV head x all GROUP query heads of that
 group x M queries (rows = GROUP*M, padded to >= 16 so tl.dot can be used), so each K/V segment is read once. The
 sequence is split into parallel segments with a deterministic merge; seq0 is a device scalar (CUDA-graph replay safe)."""
+import os
+
 import torch
 import triton
 import triton.language as tl
+
+# Calls with at most this many new query tokens are decode / verify steps and go to the Triton kernels; longer calls are
+# prefill. The kernel keeps GROUP*M query rows of one KV head in a block, so it is meant for small M (verify: gamma+1).
+DECODE_MAX_Q = int(os.environ.get("BITNEST_DECODE_MAX_Q", "16"))
 
 
 def split_for(B, Hk, Lmax, block_l=64):

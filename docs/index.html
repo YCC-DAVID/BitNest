@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BitNest</title>
+<meta name="description" content="BitNest: bit-nested self-speculative decoding. One 8-bit weight tensor serves a W4A8 draft and a W8A8 target.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+html{-webkit-text-size-adjust:100%}body{margin:0}img{max-width:100%}[hidden]{display:none!important}
+
+/* Layout: single reading column (~68ch) that widens to a two-lane stage for the live comparison; the byte diagram is the one ornament. */
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --ink: #131c28;
+  --muted: #566274;
+  --line: #d9dee6;
+  --draft: #2f5fd7;        /* tokens proposed by the W4A8 draft and accepted */
+  --draft-soft: #dfe7fb;
+  --target: #c2541c;       /* tokens produced by the W8A8 target */
+  --target-soft: #f7e1d4;
+  --fp16: #5d6878;
+  --focus: #2f5fd7;
+  --f-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --s-1: 0.8125rem; --s0: 1rem; --s1: 1.1875rem; --s2: 1.5rem; --s3: 2.125rem; --s4: clamp(2.5rem, 6vw, 3.75rem);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --muted: #9aa6b7; --line: #2a3442;
+    --draft: #7ea2ff; --draft-soft: #1f2d4f; --target: #f08a52; --target-soft: #44281b; --fp16: #a3adbb; --focus: #7ea2ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --muted: #9aa6b7; --line: #2a3442;
+  --draft: #7ea2ff; --draft-soft: #1f2d4f; --target: #f08a52; --target-soft: #44281b; --fp16: #a3adbb; --focus: #7ea2ff;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: var(--s0); line-height: 1.6; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 0 72px; }
+.col { max-width: 68ch; }
+a { color: var(--draft); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h2 { font-size: var(--s2); font-weight: 700; }
+h3 { font-size: var(--s1); font-weight: 700; }
+p { margin: 0; }
+.label { font-family: var(--f-display); font-size: var(--s-1); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+section { display: grid; gap: 18px; padding-block: 48px 0; }
+
+/* ---------- header */
+header { display: grid; gap: 22px; padding-block: 56px 8px; }
+.title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 28px; }
+h1 { font-size: var(--s4); font-weight: 800; letter-spacing: -0.02em; }
+.byte { display: inline-grid; grid-template-columns: repeat(8, 1fr); gap: 3px; width: 168px; flex: none; }
+.byte span { aspect-ratio: 1; border-radius: 3px; }
+.byte .hi { background: var(--draft); }
+.byte .lo { background: var(--target); opacity: 0.85; }
+.subtitle { font-family: var(--f-display); font-size: var(--s2); font-weight: 500; color: var(--ink); max-width: 30ch; line-height: 1.25; }
+.authors { color: var(--muted); font-size: var(--s0); max-width: 90ch; }
+.links { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-display); font-weight: 700; font-size: 0.9375rem;
+  padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; cursor: pointer; }
+.btn:hover { border-color: var(--ink); }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.primary:hover { opacity: 0.9; }
+
+/* ---------- demo */
+.demo { display: grid; gap: 16px; padding: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.demo-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab { font-family: var(--f-display); font-weight: 700; font-size: 0.875rem; padding: 7px 14px; border-radius: 999px;
+  border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+.tab[aria-selected="true"] { color: var(--ink); border-color: var(--ink); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.speed { font-family: var(--f-mono); font-size: 0.8125rem; color: var(--muted); display: flex; gap: 4px; align-items: center; }
+.speed button { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+.speed button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+.prompt { font-family: var(--f-mono); font-size: 0.8125rem; line-height: 1.55; white-space: pre-wrap; color: var(--muted);
+  background: var(--bg); border-radius: 8px; padding: 12px 14px; max-height: 9.5em; overflow: auto; overflow-wrap: anywhere; }
+.prompt b { color: var(--ink); font-weight: 600; }
+.lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .lanes { grid-template-columns: 1fr; } }
+.lane { display: grid; grid-template-rows: auto auto 1fr; gap: 10px; min-width: 0; }
+.lane-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.lane-name { font-family: var(--f-display); font-weight: 700; font-size: var(--s0); }
+.lane-name small { display: block; font-weight: 500; color: var(--muted); font-size: 0.8125rem; }
+.meter { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; font-size: 0.8125rem; color: var(--muted); }
+.meter strong { display: block; font-size: var(--s2); color: var(--ink); font-weight: 600; line-height: 1.1; }
+.track { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.track i { display: block; height: 100%; width: 0; background: var(--fp16); }
+.lane.bn .track i { background: var(--draft); }
+.out { font-family: var(--f-mono); font-size: 0.8125rem; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere;
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; height: 23em; overflow: auto; }
+.out .d { background: var(--draft-soft); border-radius: 2px; }
+.out .t { color: var(--target); font-weight: 600; }
+.out .wait { color: var(--muted); }
+.rounds { display: flex; flex-wrap: wrap; gap: 3px; min-height: 14px; }
+.round { display: grid; grid-template-columns: repeat(var(--g), 7px) 7px; gap: 1px; opacity: 0.18; }
+.round.on { opacity: 1; }
+.round i { height: 12px; border-radius: 1px; background: transparent; box-shadow: inset 0 0 0 1px var(--draft); }
+.round i.a { background: var(--draft); box-shadow: none; }
+.round i.x { box-shadow: inset 0 0 0 1px var(--muted); opacity: 0.6; }
+.round i.t { background: var(--target); box-shadow: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.8125rem; color: var(--muted); font-family: var(--f-display); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+@media (max-width: 760px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat { display: grid; gap: 2px; min-width: 0; }
+.stat b { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: var(--s1); font-weight: 600; }
+.stat span { font-size: 0.8125rem; color: var(--muted); font-family: var(--f-display); }
+.note { font-size: 0.875rem; color: var(--muted); }
+
+/* ---------- method */
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; overflow-x: auto; }
+.figure svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.figure text { font-family: var(--f-mono); font-size: 12px; fill: var(--ink); }
+.figure .cap { font-family: var(--f-display); font-size: 13px; font-weight: 700; fill: var(--muted); letter-spacing: 0.06em; }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+.step { display: grid; gap: 8px; align-content: start; }
+.step .n { font-family: var(--f-mono); font-size: 0.8125rem; color: var(--draft); }
+.step p { color: var(--ink); }
+.eq { font-family: var(--f-mono); font-size: 0.875rem; background: var(--bg); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: nowrap; }
+.big { display: flex; flex-wrap: wrap; gap: 28px 56px; }
+.big div { display: grid; gap: 4px; }
+.big b { font-family: var(--f-display); font-size: var(--s3); font-weight: 800; letter-spacing: -0.01em; }
+.big span { color: var(--muted); font-size: 0.9375rem; max-width: 26ch; }
+pre.bib { font-family: var(--f-mono); font-size: 0.8125rem; line-height: 1.55; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; margin: 0; }
+.bib-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="title-row">
+      <h1>BitNest</h1>
+      <div class="byte" aria-hidden="true"><span class="hi"></span><span class="hi"></span><span class="hi"></span><span class="hi"></span><span class="lo"></span><span class="lo"></span><span class="lo"></span><span class="lo"></span></div>
+    </div>
+    <p class="subtitle">Bit-Nested Speculative Decoding for Memory-Efficient LLM Inference Acceleration</p>
+    <p class="authors">Chence Yang, Ningxi Cheng, Arash Akbari, Qitao Tan, Qingchan Zhu, Ci Zhang, Changdi Yang, Yanzhi Wang, Wei Niu, Jinhui Wang, Jin Lu, Geng Yuan</p>
+    <div class="links">
+      <a class="btn primary" href="https://arxiv.org/abs/2610.02800">Paper · arXiv 2610.02800</a>
+      <a class="btn" href="https://github.com/YCC-DAVID/BitNest">Code</a>
+      <a class="btn" href="https://huggingface.co/YccHugAi">Models</a>
+      <a class="btn" href="#cite">BibTeX</a>
+    </div>
+  </header>
+
+  <section aria-labelledby="demo-h">
+    <div class="col" style="display:grid;gap:8px">
+      <p class="label">Recorded run</p>
+      <h2 id="demo-h">Same prompt, same GPU: FP16 decoding vs BitNest</h2>
+      <p>Both lanes replay a real run in real time. Each token appears at the moment the GPU produced it, prefill included.
+        In the BitNest lane, <span style="background:var(--draft-soft);border-radius:2px">shaded</span> tokens were proposed by the 4-bit draft and accepted by the 8-bit target;
+        <span style="color:var(--target);font-weight:600">orange</span> tokens came from the target itself.</p>
+    </div>
+    <div class="demo">
+      <div class="demo-top">
+        <div class="tabs" role="tablist" id="tabs"></div>
+        <div class="controls">
+          <button class="btn primary" id="play" type="button">Replay in real time</button>
+          <div class="speed" role="group" aria-label="Playback speed">speed
+            <button type="button" id="sp1" data-s="1" aria-pressed="true">1×</button>
+            <button type="button" id="sp05" data-s="0.5" aria-pressed="false">0.5×</button>
+            <button type="button" id="sp025" data-s="0.25" aria-pressed="false">0.25×</button>
+          </div>
+        </div>
+      </div>
+      <div class="prompt" id="prompt"></div>
+      <div class="lanes">
+        <div class="lane fp">
+          <div class="lane-head">
+            <div class="lane-name">FP16 autoregressive<small>one token per forward pass, 16-bit weights</small></div>
+            <div class="meter"><strong id="fp-rate">–</strong><span id="fp-clock">tok/s</span></div>
+          </div>
+          <div class="track"><i id="fp-bar"></i></div>
+          <div class="out" id="fp-out" aria-live="off"></div>
+        </div>
+        <div class="lane bn">
+          <div class="lane-head">
+            <div class="lane-name">BitNest<small>W4A8 draft, γ = <span id="g"></span>, verified by the W8A8 target</small></div>
+            <div class="meter"><strong id="bn-rate">–</strong><span id="bn-clock">tok/s</span></div>
+          </div>
+          <div class="track"><i id="bn-bar"></i></div>
+          <div class="out" id="bn-out" aria-live="off"></div>
+        </div>
+      </div>
+      <div style="display:grid;gap:8px">
+        <p class="label">BitNest rounds: γ draft slots, then the target's token</p>
+        <div class="rounds" id="rounds"></div>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--draft)"></i>draft token accepted</span>
+          <span><i class="sw" style="box-shadow:inset 0 0 0 1px var(--muted)"></i>draft token rejected</span>
+          <span><i class="sw" style="background:var(--target)"></i>token from the W8A8 target</span>
+        </div>
+      </div>
+      <div class="summary" id="summary"></div>
+      <p class="note" id="env"></p>
+    </div>
+  </section>
+
+  <section aria-labelledby="abs-h">
+    <div class="col" style="display:grid;gap:14px">
+      <p class="label">Abstract</p>
+      <h2 id="abs-h">A draft model that lives inside the target's weights</h2>
+      <p>Speculative decoding needs a cheap draft model, and keeping a separate one costs memory. BitNest embeds a low-precision
+        draft inside the higher-precision target weights. A single 8-bit tensor serves both: the target reads all 8 bits, the
+        draft reads only the high 4 bits. Rather than truncating an 8-bit model, BitNest first builds a strong low-precision
+        foundation and then recovers the higher precision through a residual refinement. The same nesting extends to the KV
+        cache for long contexts. Across 7B–8B models, BitNest reaches an average speculative acceptance rate of 95.2% and a
+        1.48–1.61× end-to-end speedup over FP16 autoregressive decoding.</p>
+    </div>
+    <div class="big">
+      <div><b>95.2%</b><span>average speculative acceptance rate, 7B–8B models</span></div>
+      <div><b>1.48–1.61×</b><span>end-to-end speedup over FP16 autoregressive decoding</span></div>
+      <div><b>0 bytes</b><span>of extra weight memory for the draft model</span></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="m-h">
+    <div class="col" style="display:grid;gap:8px">
+      <p class="label">Method</p>
+      <h2 id="m-h">One byte, two models</h2>
+      <p>Every weight is stored as an 8-bit code split into two 4-bit planes. The draft streams only the high plane, so a draft
+        step moves half the bytes of a target step.</p>
+    </div>
+    <div class="figure">
+      <svg viewBox="0 0 880 250" role="img" aria-labelledby="fig-t">
+        <title id="fig-t">An 8-bit weight code is split into a high nibble read by the draft and a low nibble that only the target adds.</title>
+        <text class="cap" x="20" y="28">8-BIT WEIGHT CODE</text>
+        <g id="cells"></g>
+        <text x="20" y="128">high nibble = q4 + 8</text>
+        <text x="236" y="128">low nibble = qr + 8</text>
+        <path d="M 112 140 L 112 172 L 560 172" fill="none" stroke="var(--draft)" stroke-width="2"></path>
+        <path d="M 328 140 L 328 214 L 560 214" fill="none" stroke="var(--target)" stroke-width="2"></path>
+        <path d="M 112 172 L 112 214 L 560 214" fill="none" stroke="var(--draft)" stroke-width="2" stroke-dasharray="4 4"></path>
+        <rect x="568" y="154" width="296" height="36" rx="6" fill="var(--draft-soft)"></rect>
+        <text x="582" y="177">draft  W4 = q4 · s          (W4A8)</text>
+        <rect x="568" y="196" width="296" height="36" rx="6" fill="var(--target-soft)"></rect>
+        <text x="582" y="219">target W8 = (16·q4 + qr) · s/16  (W8A8)</text>
+        <text class="cap" x="568" y="140">READ BY</text>
+      </svg>
+    </div>
+    <div class="steps">
+      <div class="step"><span class="n">Step 1 · rotate</span><h3>Remove outliers</h3>
+        <p>Learned rotations (SpinQuant) are fused into the weights so that 4-bit quantization is accurate.</p></div>
+      <div class="step"><span class="n">Step 2 · fit the draft</span><h3>GPTQ at 4 bits</h3>
+        <p>The 4-bit model is fitted first with GPTQ and locked as the high nibble, so the draft is a strong model in its own right.</p>
+        <div class="eq">hi = q4 = GPTQ-W4(W)</div></div>
+      <div class="step"><span class="n">Step 3 · refine</span><h3>Residual back to 8 bits</h3>
+        <p>The low nibble rounds the remaining residual on a 16× finer grid, recovering 8-bit quality in closed form.</p>
+        <div class="eq">lo = qr = round((W − q4·s) / (s/16))</div></div>
+    </div>
+    <div class="col" style="display:grid;gap:10px">
+      <h3>Decoding</h3>
+      <p>The draft proposes γ tokens one at a time reading only the high planes; the target then checks all of them in a single
+        batched pass reading both planes and keeps the longest prefix it agrees with, plus one token of its own. The output is
+        the target's greedy output. The KV cache is nested the same way: the draft attends over 4-bit keys and values, the
+        target over 8-bit ones, from one cache. Dual-plane GEMM and attention kernels are written in Triton, and every step
+        runs as a captured CUDA graph.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="cite">
+    <div class="bib-row"><h2 id="cite">Citation</h2><button class="btn" id="copy" type="button">Copy BibTeX</button></div>
+    <pre class="bib" id="bib">@article{yang2026bitnest,
+  title   = {BitNest: Bit-Nested Speculative Decoding for Memory-Efficient LLM Inference Acceleration},
+  author  = {Yang, Chence and Cheng, Ningxi and Akbari, Arash and Tan, Qitao and Zhu, Qingchan and Zhang, Ci and Yang, Changdi and Wang, Yanzhi and Niu, Wei and Wang, Jinhui and Lu, Jin and Yuan, Geng},
+  journal = {arXiv preprint arXiv:2610.02800},
+  year    = {2026}
+}</pre>
+  </section>
+
+  <footer>BitNest · arXiv 2610.02800</footer>
+</div>
+
+<script id="trace" type="application/json">{"model":"qwen2.5","source_model":"Qwen/Qwen2.5-7B","gamma":3,"gen":192,"gpu":"NVIDIA RTX A6000","torch":"2.10.0+cu128","examples":[{"id":"math","title":"Math word problem (GSM8K, 4-shot)","prompt":"Question: A robe takes 2 bolts of blue fiber and half that much white fiber.  How many bolts in total does it take?\nAnswer:","context_tokens":581,"fp16":{"text":" The robe takes 2 bolts of blue fiber and half that much white fiber, which is 2 / 2 = <<2/2=1>>1 bolt of white fiber.\nIn total, it takes 2 + 1 = <<2+1=3>>3 bolts of fiber.\n#### 3","pieces":[" The"," robe"," takes"," ","2"," bolts"," of"," blue"," fiber"," and"," half"," that"," much"," white"," fiber",","," which"," is"," ","2"," /"," ","2"," ="," <<","2","/","2","=","1",">>","1"," bolt"," of"," white"," fiber",".\n","In"," total",","," it"," takes"," ","2"," +"," ","1"," ="," <<","2","+","1","=","3",">>","3"," bolts"," of"," fiber",".\n","####"," ","3"],"times":[0.0,0.0238,0.0474,0.0709,0.0942,0.1175,0.1407,0.164,0.1873,0.2105,0.2338,0.257,0.2803,0.3036,0.3268,0.3501,0.3733,0.3966,0.4198,0.4431,0.4663,0.4896,0.5128,0.5361,0.5593,0.5826,0.6059,0.6291,0.6524,0.6756,0.6989,0.7222,0.7454,0.7687,0.792,0.8153,0.8385,0.8618,0.8851,0.9083,0.9316,0.9549,0.9781,1.0014,1.0246,1.0479,1.0711,1.0944,1.1176,1.1409,1.1642,1.1875,1.2108,1.2341,1.2574,1.2807,1.3039,1.3272,1.3504,1.3737,1.3969,1.4202,1.4435],"prefill_s":0.0979,"tok_s":42.95},"w8a8":{"tok_s":52.4414128792848,"prefill_s":0.18503190204501152,"identical_to_spec":false},"bitnest":{"text":" The robe takes 2 bolts of blue fiber and half that much white fiber, which is 2 / 2 = <<2/2=1>>1 bolt of white fiber.\nIn total, it takes 2 + 1 = <<2+1=3>>3 bolts of fiber.\n#### 3","pieces":[" The"," robe"," takes"," ","2"," bolts"," of"," blue"," fiber"," and"," half"," that"," much"," white"," fiber",","," which"," is"," ","2"," /"," ","2"," ="," <<","2","/","2","=","1",">>","1"," bolt"," of"," white"," fiber",".\n","In"," total",","," it"," takes"," ","2"," +"," ","1"," ="," <<","2","+","1","=","3",">>","3"," bolts"," of"," fiber",".\n","####"," ","3"],"times":[0.0,0.0595,0.0595,0.0595,0.0595,0.1167,0.1167,0.1167,0.1167,0.1733,0.1733,0.1733,0.1733,0.23,0.23,0.23,0.23,0.2866,0.2866,0.2866,0.2866,0.3434,0.3434,0.3434,0.3434,0.4,0.4,0.4,0.4,0.4566,0.4566,0.4566,0.4566,0.5132,0.5132,0.5132,0.5132,0.5702,0.5702,0.5702,0.5702,0.6271,0.6271,0.6271,0.6271,0.684,0.684,0.684,0.684,0.7407,0.7407,0.7407,0.7407,0.7973,0.7973,0.7973,0.7973,0.854,0.854,0.854,0.854,0.9106,0.9106],"prefill_s":0.1857,"tok_s":68.08,"rounds":[{"t":0.0595,"accepted":3,"tokens":[62619,4990,220,17]},{"t":0.1167,"accepted":3,"tokens":[48839,315,6303,23788]},{"t":0.1733,"accepted":3,"tokens":[323,4279,429,1753]},{"t":0.23,"accepted":3,"tokens":[4158,23788,11,892]},{"t":0.2866,"accepted":3,"tokens":[374,220,17,608]},{"t":0.3434,"accepted":3,"tokens":[220,17,284,1115]},{"t":0.4,"accepted":3,"tokens":[17,14,17,28]},{"t":0.4566,"accepted":3,"tokens":[16,2452,16,31842]},{"t":0.5132,"accepted":3,"tokens":[315,4158,23788,624]},{"t":0.5702,"accepted":3,"tokens":[641,2790,11,432]},{"t":0.6271,"accepted":3,"tokens":[4990,220,17,488]},{"t":0.684,"accepted":3,"tokens":[220,16,284,1115]},{"t":0.7407,"accepted":3,"tokens":[17,10,16,28]},{"t":0.7973,"accepted":3,"tokens":[18,2452,18,48839]},{"t":0.854,"accepted":3,"tokens":[315,23788,624,820]},{"t":0.9106,"accepted":3,"tokens":[220,18,271]}],"accept":0.9533333333333334},"speedup":1.585110176899887},{"id":"code","title":"Code completion (HumanEval)","prompt":"from typing import List\n\n\ndef has_close_elements(numbers: List[float], threshold: float) -> bool:\n    \"\"\" Check if in given list of numbers, are any two numbers closer to each other than\n    given threshold.\n    >>> has_close_elements([1.0, 2.0, 3.0], 0.5)\n    False\n    >>> has_close_elements([1.0, 2.8, 3.0, 4.0, 5.0, 2.0], 0.3)\n    True\n    \"\"\"\n","context_tokens":119,"fp16":{"text":"    numbers.sort()\n    for i in range(len(numbers) - 1):\n        if numbers[i + 1] - numbers[i] < threshold:\n            return True\n    return False","pieces":["   "," numbers",".sort","()\n","   "," for"," i"," in"," range","(len","(numbers",")"," -"," ","1","):\n","       "," if"," numbers","[i"," +"," ","1","]"," -"," numbers","[i","]"," <"," threshold",":\n","           "," return"," True","\n","   "," return"," False"],"times":[0.0,0.0236,0.047,0.0703,0.0936,0.1168,0.14,0.1632,0.1864,0.2096,0.2328,0.256,0.2792,0.3024,0.3256,0.3488,0.372,0.3953,0.4185,0.4417,0.4649,0.4881,0.5113,0.5345,0.5578,0.581,0.6042,0.6274,0.6506,0.6738,0.697,0.7202,0.7434,0.7666,0.7899,0.8131,0.8363,0.8595],"prefill_s":0.032,"tok_s":43.05},"w8a8":{"tok_s":52.54038326819405,"prefill_s":0.06979803007561713,"identical_to_spec":true},"bitnest":{"text":"    numbers.sort()\n    for i in range(len(numbers) - 1):\n        if numbers[i + 1] - numbers[i] < threshold:\n            return True\n    return False","pieces":["   "," numbers",".sort","()\n","   "," for"," i"," in"," range","(len","(numbers",")"," -"," ","1","):\n","       "," if"," numbers","[i"," +"," ","1","]"," -"," numbers","[i","]"," <"," threshold",":\n","           "," return"," True","\n","   "," return"," False"],"times":[0.0,0.0577,0.0577,0.0577,0.0577,0.1148,0.1148,0.1148,0.1148,0.1718,0.1718,0.1718,0.1718,0.2289,0.2289,0.2289,0.2289,0.2859,0.2859,0.2859,0.2859,0.3428,0.3428,0.3428,0.3428,0.3997,0.3997,0.3997,0.3997,0.4565,0.4565,0.4565,0.4565,0.5135,0.5135,0.5135,0.5135,0.5705],"prefill_s":0.07,"tok_s":64.86,"rounds":[{"t":0.0577,"accepted":3,"tokens":[5109,10614,741,262]},{"t":0.1148,"accepted":3,"tokens":[369,600,304,2088]},{"t":0.1718,"accepted":3,"tokens":[6901,47207,8,481]},{"t":0.2289,"accepted":3,"tokens":[220,16,982,286]},{"t":0.2859,"accepted":3,"tokens":[421,5109,989,488]},{"t":0.3428,"accepted":3,"tokens":[220,16,60,481]},{"t":0.3997,"accepted":3,"tokens":[5109,989,60,366]},{"t":0.4565,"accepted":3,"tokens":[12171,510,310,470]},{"t":0.5135,"accepted":3,"tokens":[3007,198,262,470]},{"t":0.5705,"accepted":3,"tokens":[3557,1406]}],"accept":0.9863945578231292},"speedup":1.506679377476594},{"id":"chat","title":"Chat","prompt":"A conversation between a curious user and a helpful, knowledgeable assistant.\n\nUser: Why does speculative decoding make LLM inference faster without changing the output?\nAssistant:","context_tokens":32,"fp16":{"text":" Speculative decoding is a technique used in language models, particularly in the context of large language models (LLMs), to improve inference speed without altering the output. Here's how it works and why it achieves this:\n\n1. **Parallel Processing**: In traditional decoding, each token is generated sequentially, one after another. Speculative decoding, on the other hand, allows for parallel processing of multiple tokens. This means that while the model is generating one token, it can start working on the next few tokens simultaneously. This parallelism significantly reduces the overall time required for inference.\n\n2. **Efficient Use of Resources**: By processing multiple tokens at once, speculative decoding makes more efficient use of computational resources. It can take advantage of hardware accelerators like GPUs or TPUs more effectively, which are designed to handle parallel computations.\n\n3. **No Change in Output Quality**: Despite the speedup, speculative decoding does not affect the quality of the generated text. The model","pieces":[" Spec","ulative"," decoding"," is"," a"," technique"," used"," in"," language"," models",","," particularly"," in"," the"," context"," of"," large"," language"," models"," (","LL","Ms","),"," to"," improve"," inference"," speed"," without"," altering"," the"," output","."," Here","'s"," how"," it"," works"," and"," why"," it"," achieves"," this",":\n\n","1","."," **","Parallel"," Processing","**:"," In"," traditional"," decoding",","," each"," token"," is"," generated"," sequentially",","," one"," after"," another","."," Spec","ulative"," decoding",","," on"," the"," other"," hand",","," allows"," for"," parallel"," processing"," of"," multiple"," tokens","."," This"," means"," that"," while"," the"," model"," is"," generating"," one"," token",","," it"," can"," start"," working"," on"," the"," next"," few"," tokens"," simultaneously","."," This"," parallel","ism"," significantly"," reduces"," the"," overall"," time"," required"," for"," inference",".\n\n","2","."," **","Eff","icient"," Use"," of"," Resources","**:"," By"," processing"," multiple"," tokens"," at"," once",","," speculative"," decoding"," makes"," more"," efficient"," use"," of"," computational"," resources","."," It"," can"," take"," advantage"," of"," hardware"," acceler","ators"," like"," GPUs"," or"," TP","Us"," more"," effectively",","," which"," are"," designed"," to"," handle"," parallel"," computations",".\n\n","3","."," **","No"," Change"," in"," Output"," Quality","**:"," Despite"," the"," speed","up",","," speculative"," decoding"," does"," not"," affect"," the"," quality"," of"," the"," generated"," text","."," The"," model"],"times":[0.0,0.0233,0.0466,0.0699,0.0931,0.1164,0.1397,0.1629,0.1862,0.2095,0.2328,0.256,0.2793,0.3026,0.3259,0.3491,0.3723,0.3956,0.4188,0.442,0.4653,0.4885,0.5117,0.535,0.5583,0.5815,0.6048,0.6281,0.6514,0.6746,0.6979,0.7212,0.7444,0.7677,0.791,0.8143,0.8375,0.8608,0.8841,0.9074,0.9306,0.9539,0.9772,1.0005,1.0237,1.047,1.0703,1.0935,1.1168,1.1401,1.1634,1.1866,1.2099,1.2332,1.2565,1.2797,1.303,1.3263,1.3495,1.3728,1.3961,1.4194,1.4427,1.466,1.4893,1.5126,1.5359,1.5592,1.5825,1.6058,1.6291,1.6524,1.6757,1.699,1.7223,1.7456,1.7689,1.7922,1.8155,1.8388,1.8621,1.8854,1.9087,1.932,1.9553,1.9786,2.0019,2.0252,2.0485,2.0718,2.0951,2.1184,2.1417,2.165,2.1883,2.2116,2.2349,2.2582,2.2815,2.3048,2.3281,2.3514,2.3747,2.398,2.4213,2.4446,2.4679,2.4913,2.5145,2.5378,2.5611,2.5844,2.6077,2.631,2.6544,2.6777,2.701,2.7243,2.7476,2.7708,2.7942,2.8175,2.8408,2.8641,2.8874,2.9107,2.934,2.9573,2.9806,3.0039,3.0272,3.0505,3.0738,3.0971,3.1204,3.1437,3.167,3.1903,3.2136,3.2369,3.2603,3.2836,3.3069,3.3302,3.3535,3.3768,3.4001,3.4236,3.4469,3.4702,3.4935,3.5168,3.5401,3.5634,3.5867,3.61,3.6333,3.6566,3.6799,3.7033,3.7265,3.7498,3.7732,3.7965,3.8198,3.8431,3.8664,3.8897,3.913,3.9363,3.9596,3.9829,4.0062,4.0295,4.0529,4.0762,4.0995,4.1228,4.1462,4.1695,4.1928,4.2161,4.2394,4.2627,4.286,4.3093,4.3326,4.3559,4.3792,4.4026,4.4259,4.4492],"prefill_s":0.0285,"tok_s":42.93},"w8a8":{"tok_s":52.38373117663192,"prefill_s":0.04929633508436382,"identical_to_spec":false},"bitnest":{"text":" Speculative decoding is a technique used in language models, particularly in the context of large language models (LLMs), to improve inference speed without altering the output. Here's how it works and why it achieves this:\n\n1. **Parallel Processing**: LLMs are often designed to process text in parallel, which means they can generate multiple tokens simultaneously. Speculative decoding takes advantage of this by predicting several possible next tokens at once, rather than generating them sequentially.\n\n2. **Reduced Computation**: By predicting multiple tokens at once, speculative decoding reduces the number of computations needed to generate the final output. This is because the model doesn't have to wait for each token to be generated before moving on to the next one.\n\n3. **Efficient Use of Resources**: Speculative decoding allows the model to use its computational resources more efficiently. Instead of spending time on generating one token at a time, it can generate several tokens in parallel, which can significantly speed","pieces":[" Spec","ulative"," decoding"," is"," a"," technique"," used"," in"," language"," models",","," particularly"," in"," the"," context"," of"," large"," language"," models"," (","LL","Ms","),"," to"," improve"," inference"," speed"," without"," altering"," the"," output","."," Here","'s"," how"," it"," works"," and"," why"," it"," achieves"," this",":\n\n","1","."," **","Parallel"," Processing","**:"," L","LM","s"," are"," often"," designed"," to"," process"," text"," in"," parallel",","," which"," means"," they"," can"," generate"," multiple"," tokens"," simultaneously","."," Spec","ulative"," decoding"," takes"," advantage"," of"," this"," by"," predicting"," several"," possible"," next"," tokens"," at"," once",","," rather"," than"," generating"," them"," sequentially",".\n\n","2","."," **","Reduc","ed"," Com","putation","**:"," By"," predicting"," multiple"," tokens"," at"," once",","," speculative"," decoding"," reduces"," the"," number"," of"," computations"," needed"," to"," generate"," the"," final"," output","."," This"," is"," because"," the"," model"," doesn","'t"," have"," to"," wait"," for"," each"," token"," to"," be"," generated"," before"," moving"," on"," to"," the"," next"," one",".\n\n","3","."," **","Eff","icient"," Use"," of"," Resources","**:"," Spec","ulative"," decoding"," allows"," the"," model"," to"," use"," its"," computational"," resources"," more"," efficiently","."," Instead"," of"," spending"," time"," on"," generating"," one"," token"," at"," a"," time",","," it"," can"," generate"," several"," tokens"," in"," parallel",","," which"," can"," significantly"," speed"],"times":[0.0,0.0569,0.0569,0.0569,0.0569,0.1139,0.1139,0.1139,0.1139,0.1709,0.1709,0.1709,0.1709,0.2281,0.2281,0.2281,0.2281,0.2852,0.2852,0.2852,0.2852,0.3423,0.3423,0.3423,0.3423,0.3994,0.3994,0.3994,0.3994,0.4565,0.4565,0.4565,0.4565,0.5135,0.5135,0.5135,0.5135,0.5705,0.5705,0.5705,0.5705,0.6276,0.6276,0.6276,0.6276,0.6847,0.6847,0.6847,0.6847,0.7418,0.7418,0.7418,0.7418,0.7988,0.7988,0.7988,0.7988,0.8558,0.9129,0.9129,0.9129,0.9129,0.9699,1.0269,1.0269,1.0269,1.0269,1.084,1.084,1.084,1.084,1.1411,1.1411,1.1411,1.1411,1.1982,1.1982,1.1982,1.1982,1.2551,1.3121,1.3121,1.3121,1.3121,1.3692,1.3692,1.4262,1.4262,1.4262,1.4262,1.4833,1.4833,1.4833,1.4833,1.5403,1.5403,1.5974,1.5974,1.5974,1.5974,1.6543,1.6543,1.6543,1.6543,1.7114,1.7114,1.7114,1.7114,1.7684,1.7684,1.7684,1.7684,1.8255,1.8255,1.8255,1.8255,1.8825,1.8825,1.8825,1.8825,1.9396,1.9396,1.9396,1.9396,1.9964,1.9964,1.9964,2.0533,2.0533,2.0533,2.0533,2.1101,2.1101,2.1101,2.1101,2.1671,2.1671,2.1671,2.1671,2.2241,2.2241,2.2241,2.2241,2.2812,2.2812,2.2812,2.2812,2.3382,2.3382,2.3382,2.3382,2.3954,2.3954,2.3954,2.3954,2.4524,2.4524,2.4524,2.4524,2.5096,2.5096,2.5096,2.5096,2.5667,2.6239,2.6239,2.6239,2.6239,2.6809,2.6809,2.6809,2.6809,2.7379,2.7379,2.7379,2.7948,2.7948,2.7948,2.7948,2.8518,2.8518,2.8518,2.8518,2.9087,2.9656,2.9656,2.9656,2.9656,3.0226,3.0226,3.0226,3.0226],"prefill_s":0.0411,"tok_s":63.19,"rounds":[{"t":0.0569,"accepted":3,"tokens":[22160,47116,374,264]},{"t":0.1139,"accepted":3,"tokens":[14762,1483,304,4128]},{"t":0.1709,"accepted":3,"tokens":[4119,11,7945,304]},{"t":0.2281,"accepted":3,"tokens":[279,2266,315,3460]},{"t":0.2852,"accepted":3,"tokens":[4128,4119,320,4086]},{"t":0.3423,"accepted":3,"tokens":[21634,701,311,7269]},{"t":0.3994,"accepted":3,"tokens":[44378,4628,2041,59823]},{"t":0.4565,"accepted":3,"tokens":[279,2550,13,5692]},{"t":0.5135,"accepted":3,"tokens":[594,1246,432,4278]},{"t":0.5705,"accepted":3,"tokens":[323,3170,432,82591]},{"t":0.6276,"accepted":3,"tokens":[419,1447,16,13]},{"t":0.6847,"accepted":3,"tokens":[3070,16547,28125,95518]},{"t":0.7418,"accepted":3,"tokens":[444,10994,82,525]},{"t":0.7988,"accepted":3,"tokens":[3545,6188,311,1882]},{"t":0.8558,"accepted":0,"tokens":[1467]},{"t":0.9129,"accepted":3,"tokens":[304,15279,11,892]},{"t":0.9699,"accepted":0,"tokens":[3363]},{"t":1.0269,"accepted":3,"tokens":[807,646,6923,5248]},{"t":1.084,"accepted":3,"tokens":[11211,24303,13,10956]},{"t":1.1411,"accepted":3,"tokens":[22160,47116,4990,9423]},{"t":1.1982,"accepted":3,"tokens":[315,419,553,51897]},{"t":1.2551,"accepted":0,"tokens":[3807]},{"t":1.3121,"accepted":3,"tokens":[3204,1790,11211,518]},{"t":1.3692,"accepted":1,"tokens":[3055,11]},{"t":1.4262,"accepted":3,"tokens":[4751,1091,23163,1105]},{"t":1.4833,"accepted":3,"tokens":[94559,382,17,13]},{"t":1.5403,"accepted":1,"tokens":[3070,16609]},{"t":1.5974,"accepted":3,"tokens":[291,1198,13320,95518]},{"t":1.6543,"accepted":3,"tokens":[3216,51897,5248,11211]},{"t":1.7114,"accepted":3,"tokens":[518,3055,11,65736]},{"t":1.7684,"accepted":3,"tokens":[47116,25271,279,1372]},{"t":1.8255,"accepted":3,"tokens":[315,82599,4362,311]},{"t":1.8825,"accepted":3,"tokens":[6923,279,1590,2550]},{"t":1.9396,"accepted":3,"tokens":[13,1096,374,1576]},{"t":1.9964,"accepted":2,"tokens":[279,1614,3171]},{"t":2.0533,"accepted":3,"tokens":[944,614,311,3783]},{"t":2.1101,"accepted":3,"tokens":[369,1817,3950,311]},{"t":2.1671,"accepted":3,"tokens":[387,7907,1573,7218]},{"t":2.2241,"accepted":3,"tokens":[389,311,279,1790]},{"t":2.2812,"accepted":3,"tokens":[825,382,18,13]},{"t":2.3382,"accepted":3,"tokens":[3070,46588,5385,5443]},{"t":2.3954,"accepted":3,"tokens":[315,16209,95518,10956]},{"t":2.4524,"accepted":3,"tokens":[22160,47116,6147,279]},{"t":2.5096,"accepted":3,"tokens":[1614,311,990,1181]},{"t":2.5667,"accepted":0,"tokens":[54480]},{"t":2.6239,"accepted":3,"tokens":[4963,803,29720,13]},{"t":2.6809,"accepted":3,"tokens":[12090,315,10164,882]},{"t":2.7379,"accepted":2,"tokens":[389,23163,825]},{"t":2.7948,"accepted":3,"tokens":[3950,518,264,882]},{"t":2.8518,"accepted":3,"tokens":[11,432,646,6923]},{"t":2.9087,"accepted":0,"tokens":[3807]},{"t":2.9656,"accepted":3,"tokens":[11211,304,15279,11]},{"t":3.0226,"accepted":3,"tokens":[892,646,11941,4628]}],"accept":0.8679245283018868},"speedup":1.4719434986208928}]}</script>
+<script>
+(function () {
+  var D = JSON.parse(document.getElementById("trace").textContent);
+  var G = D.gamma, cur = 0, speed = 1, raf = null, t0 = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  $("g").textContent = G;
+  $("env").textContent = "Recorded on one " + D.gpu + " with " + D.source_model + ", batch 1, greedy decoding, PyTorch " + D.torch.split("+")[0] +
+    ". Both lanes use the same engine (CUDA graphs, Triton attention). Small wording differences between the lanes come from the 8-bit target versus the 16-bit model.";
+
+  // byte diagram cells
+  (function () {
+    var g = $("cells"), bits = [1,0,1,1, 0,1,1,0], ns = "http://www.w3.org/2000/svg";
+    for (var i = 0; i < 8; i++) {
+      var r = document.createElementNS(ns, "rect");
+      r.setAttribute("x", 20 + i * 54); r.setAttribute("y", 44); r.setAttribute("width", 48); r.setAttribute("height", 52); r.setAttribute("rx", 6);
+      r.setAttribute("fill", i < 4 ? "var(--draft)" : "var(--target)"); r.setAttribute("opacity", i < 4 ? "1" : "0.85"); g.appendChild(r);
+      var t = document.createElementNS(ns, "text");
+      t.setAttribute("x", 44 + i * 54); t.setAttribute("y", 76); t.setAttribute("text-anchor", "middle"); t.setAttribute("style", "fill:#fff;font-size:16px;font-weight:600");
+      t.textContent = bits[i]; g.appendChild(t);
+    }
+  })();
+
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  // per-token kinds for the BitNest lane: first token comes from prefill (target); in each round the first `accepted`
+  // tokens are accepted drafts, the next one is the target's own
+  function kinds(ex) {
+    var k = ["t"];
+    ex.bitnest.rounds.forEach(function (r) { r.tokens.forEach(function (_, j) { k.push(j < r.accepted ? "d" : "t"); }); });
+    return k.slice(0, ex.bitnest.pieces.length);
+  }
+
+  function buildTabs() {
+    var tabs = $("tabs");
+    D.examples.forEach(function (ex, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.id = "tab-" + ex.id; b.setAttribute("role", "tab");
+      b.textContent = ex.title; b.setAttribute("aria-selected", i === cur ? "true" : "false");
+      b.addEventListener("click", function () { select(i); });
+      tabs.appendChild(b);
+    });
+  }
+
+  function buildRounds(ex) {
+    var box = $("rounds"); box.innerHTML = "";
+    ex.bitnest.rounds.forEach(function (r) {
+      var el = document.createElement("div"); el.className = "round"; el.style.setProperty("--g", G);
+      for (var j = 0; j < G; j++) { var c = document.createElement("i"); c.className = j < r.accepted ? "a" : "x"; el.appendChild(c); }
+      var t = document.createElement("i"); t.className = "t"; el.appendChild(t);
+      box.appendChild(el);
+    });
+  }
+
+  function fmtS(s) { return s.toFixed(2) + " s"; }
+
+  function render(ex, ms) {
+    // ms: elapsed wall time since the request, in ms of the recording (null = finished state)
+    var lanes = [["fp", ex.fp16, null], ["bn", ex.bitnest, kinds(ex)]];
+    lanes.forEach(function (L) {
+      var id = L[0], d = L[1], kd = L[2], pre = d.prefill_s * 1000, n = d.pieces.length;
+      var tEnd = pre + d.times[n - 1] * 1000, t = ms === null ? tEnd : Math.min(ms, tEnd), shown = 0;
+      while (shown < n && pre + d.times[shown] * 1000 <= t) shown++;
+      var html = "";
+      for (var i = 0; i < shown; i++) {
+        var p = esc(d.pieces[i]);
+        html += kd ? '<span class="' + kd[i] + '">' + p + "</span>" : p;
+      }
+      if (shown === 0) html = '<span class="wait">prefill · ' + (t / 1000).toFixed(2) + " s</span>";
+      var out = $(id + "-out"), stick = out.scrollTop + out.clientHeight >= out.scrollHeight - 24;
+      out.innerHTML = html;
+      if (ms !== null && stick) out.scrollTop = out.scrollHeight;
+      var dec = (t - pre) / 1000, rate = shown > 1 && dec > 0 ? (shown - 1) / dec : 0;
+      $(id + "-rate").textContent = ms === null ? d.tok_s.toFixed(1) : (rate ? rate.toFixed(1) : "–");
+      $(id + "-clock").textContent = "tok/s · " + shown + " tokens · " + fmtS(t / 1000);
+      $(id + "-bar").style.width = (100 * shown / n) + "%";
+    });
+    var rs = $("rounds").children, bpre = ex.bitnest.prefill_s * 1000;
+    for (var r = 0; r < rs.length; r++) rs[r].classList.toggle("on", ms === null || bpre + ex.bitnest.rounds[r].t * 1000 <= ms);
+  }
+
+  function summary(ex) {
+    var f = ex.fp16, b = ex.bitnest;
+    var fEnd = f.prefill_s + f.times[f.times.length - 1], bEnd = b.prefill_s + b.times[b.times.length - 1];
+    var items = [
+      [(b.tok_s / f.tok_s).toFixed(2) + "×", "decode speedup over FP16"],
+      [(fEnd / bEnd).toFixed(2) + "×", "end-to-end, prefill included"],
+      [(100 * b.accept).toFixed(1) + "%", "draft tokens accepted"],
+      [fmtS(bEnd) + " / " + fmtS(fEnd), "BitNest / FP16 time to last token"]
+    ];
+    $("summary").innerHTML = items.map(function (it) { return '<div class="stat"><b>' + it[0] + "</b><span>" + it[1] + "</span></div>"; }).join("");
+  }
+
+  function stop() { if (raf) cancelAnimationFrame(raf); raf = null; $("play").textContent = "Replay in real time"; }
+
+  function select(i) {
+    stop(); cur = i;
+    Array.prototype.forEach.call($("tabs").children, function (b, j) { b.setAttribute("aria-selected", j === i ? "true" : "false"); });
+    var ex = D.examples[i];
+    $("prompt").innerHTML = (ex.id === "math" ? "<b>[4 solved examples omitted]</b>\n" : "") + esc(ex.prompt);
+    buildRounds(ex); summary(ex); render(ex, null);
+    $("fp-out").scrollTop = 0; $("bn-out").scrollTop = 0;
+  }
+
+  function play() {
+    if (raf) { stop(); render(D.examples[cur], null); return; }
+    var ex = D.examples[cur];
+    var end = Math.max(ex.fp16.prefill_s + ex.fp16.times[ex.fp16.times.length - 1], ex.bitnest.prefill_s + ex.bitnest.times[ex.bitnest.times.length - 1]) * 1000;
+    $("fp-out").scrollTop = 0; $("bn-out").scrollTop = 0;
+    $("play").textContent = "Stop"; t0 = performance.now();
+    var tick = function (now) {
+      var ms = (now - t0) * speed;
+      render(ex, Math.min(ms, end));
+      if (ms < end) raf = requestAnimationFrame(tick); else { raf = null; $("play").textContent = "Replay in real time"; }
+    };
+    raf = requestAnimationFrame(tick);
+  }
+
+  $("play").addEventListener("click", play);
+  ["sp1", "sp05", "sp025"].forEach(function (id) {
+    $(id).addEventListener("click", function () {
+      speed = parseFloat(this.getAttribute("data-s"));
+      ["sp1", "sp05", "sp025"].forEach(function (o) { $(o).setAttribute("aria-pressed", o === id ? "true" : "false"); });
+      if (raf) { stop(); play(); }
+    });
+  });
+  $("copy").addEventListener("click", function () {
+    var txt = $("bib").textContent, btn = this;
+    var done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy BibTeX"; }, 1500); };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents($("bib")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected, press Ctrl+C"; };
+    try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
+  });
+
+  buildTabs(); select(0);
+})();
+</script>
+
+</body>
+</html>

@@ -34,6 +34,7 @@ q4 = GPTQ-W4 code (high plane), qr = round((W − q4·s)/(s/16)) (low plane)
 | `bitnest/cold_load.py`, `bitnest/reference_model.py` | Package loaders: GPU cold load (no bf16 model materialized) and a pure-PyTorch reference (CPU) |
 | `bitnest/task_eval.py`, `eval_quality.py` | Task-level evaluation through the engine (GSM8K, LongBench) and fake-quant PPL / acceptance |
 | `tools/make_prompts.py` | Evaluation prompt files (wiki2, gsm8k, code, sharegpt, longdoc, pg19) |
+| `examples/compare_decoding.py`, `docs/` | FP16 vs BitNest side-by-side demo; project page (`tools/build_page.py`) |
 | `scripts/` | Pipeline: `train_rotation.sh`, `build_package.sh`, `run_benchmark.sh`, `eval_quality.sh` |
 
 ## Installation
@@ -76,6 +77,12 @@ Useful flags of `bitnest/generate.py`:
 - `--ppl_check <prompts.pt>` prefill-path PPL of target and draft; `--ppl_decode_n N` PPL along the decode path and along the exact BitNest draft+verify path; `--ppl_tail N` long-context tail PPL.
 - `--only fp16|w8a8|spec`, `--skip_fp16`, `--mem_cap_gib G` (emulate a smaller device), `--eager` (no CUDA graphs).
 - Environment: `BITNEST_GEMV_M1=1` M=1 GEMV kernel (faster on small GPUs such as Jetson Orin), `BITNEST_PREFILL_DTYPE=fp16|bf16|fp32`, `BITNEST_PREFILL_CHUNK`, `BITNEST_CALIB_WS_MB`.
+
+Side-by-side demo, FP16 decoding vs BitNest on one prompt (streams both outputs, prints tok/s and acceptance, and
+saves a timed trace that `tools/build_page.py` turns into the replay on the project page in `docs/`):
+```bash
+python examples/compare_decoding.py --pkg release/bitnest_qwen2.5 --prompt "def quicksort(arr):" --gen 128
+```
 
 Pure-PyTorch reference (no Triton, runs on CPU), e.g. for porting the format to another runtime:
 ```bash

@@ -1,0 +1,414 @@
+<title>BitNest</title>
+<meta name="description" content="BitNest: bit-nested self-speculative decoding. One 8-bit weight tensor serves a W4A8 draft and a W8A8 target.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@500;700;800&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: single reading column (~68ch) that widens to a two-lane stage for the live comparison; the byte diagram is the one ornament. */
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --ink: #131c28;
+  --muted: #566274;
+  --line: #d9dee6;
+  --draft: #2f5fd7;        /* tokens proposed by the W4A8 draft and accepted */
+  --draft-soft: #dfe7fb;
+  --target: #c2541c;       /* tokens produced by the W8A8 target */
+  --target-soft: #f7e1d4;
+  --fp16: #5d6878;
+  --focus: #2f5fd7;
+  --f-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --s-1: 0.8125rem; --s0: 1rem; --s1: 1.1875rem; --s2: 1.5rem; --s3: 2.125rem; --s4: clamp(2.5rem, 6vw, 3.75rem);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --muted: #9aa6b7; --line: #2a3442;
+    --draft: #7ea2ff; --draft-soft: #1f2d4f; --target: #f08a52; --target-soft: #44281b; --fp16: #a3adbb; --focus: #7ea2ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --muted: #9aa6b7; --line: #2a3442;
+  --draft: #7ea2ff; --draft-soft: #1f2d4f; --target: #f08a52; --target-soft: #44281b; --fp16: #a3adbb; --focus: #7ea2ff;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: var(--s0); line-height: 1.6; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 0 72px; }
+.col { max-width: 68ch; }
+a { color: var(--draft); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h2 { font-size: var(--s2); font-weight: 700; }
+h3 { font-size: var(--s1); font-weight: 700; }
+p { margin: 0; }
+.label { font-family: var(--f-display); font-size: var(--s-1); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+section { display: grid; gap: 18px; padding-block: 48px 0; }
+
+/* ---------- header */
+header { display: grid; gap: 22px; padding-block: 56px 8px; }
+.title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 28px; }
+h1 { font-size: var(--s4); font-weight: 800; letter-spacing: -0.02em; }
+.byte { display: inline-grid; grid-template-columns: repeat(8, 1fr); gap: 3px; width: 168px; flex: none; }
+.byte span { aspect-ratio: 1; border-radius: 3px; }
+.byte .hi { background: var(--draft); }
+.byte .lo { background: var(--target); opacity: 0.85; }
+.subtitle { font-family: var(--f-display); font-size: var(--s2); font-weight: 500; color: var(--ink); max-width: 30ch; line-height: 1.25; }
+.authors { color: var(--muted); font-size: var(--s0); max-width: 90ch; }
+.links { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; font-family: var(--f-display); font-weight: 700; font-size: 0.9375rem;
+  padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; cursor: pointer; }
+.btn:hover { border-color: var(--ink); }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.primary:hover { opacity: 0.9; }
+
+/* ---------- demo */
+.demo { display: grid; gap: 16px; padding: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.demo-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tab { font-family: var(--f-display); font-weight: 700; font-size: 0.875rem; padding: 7px 14px; border-radius: 999px;
+  border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+.tab[aria-selected="true"] { color: var(--ink); border-color: var(--ink); }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.speed { font-family: var(--f-mono); font-size: 0.8125rem; color: var(--muted); display: flex; gap: 4px; align-items: center; }
+.speed button { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+.speed button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+.prompt { font-family: var(--f-mono); font-size: 0.8125rem; line-height: 1.55; white-space: pre-wrap; color: var(--muted);
+  background: var(--bg); border-radius: 8px; padding: 12px 14px; max-height: 9.5em; overflow: auto; overflow-wrap: anywhere; }
+.prompt b { color: var(--ink); font-weight: 600; }
+.lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .lanes { grid-template-columns: 1fr; } }
+.lane { display: grid; grid-template-rows: auto auto 1fr; gap: 10px; min-width: 0; }
+.lane-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.lane-name { font-family: var(--f-display); font-weight: 700; font-size: var(--s0); }
+.lane-name small { display: block; font-weight: 500; color: var(--muted); font-size: 0.8125rem; }
+.meter { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; font-size: 0.8125rem; color: var(--muted); }
+.meter strong { display: block; font-size: var(--s2); color: var(--ink); font-weight: 600; line-height: 1.1; }
+.track { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.track i { display: block; height: 100%; width: 0; background: var(--fp16); }
+.lane.bn .track i { background: var(--draft); }
+.out { font-family: var(--f-mono); font-size: 0.8125rem; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere;
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; height: 23em; overflow: auto; }
+.out .d { background: var(--draft-soft); border-radius: 2px; }
+.out .t { color: var(--target); font-weight: 600; }
+.out .wait { color: var(--muted); }
+.rounds { display: flex; flex-wrap: wrap; gap: 3px; min-height: 14px; }
+.round { display: grid; grid-template-columns: repeat(var(--g), 7px) 7px; gap: 1px; opacity: 0.18; }
+.round.on { opacity: 1; }
+.round i { height: 12px; border-radius: 1px; background: transparent; box-shadow: inset 0 0 0 1px var(--draft); }
+.round i.a { background: var(--draft); box-shadow: none; }
+.round i.x { box-shadow: inset 0 0 0 1px var(--muted); opacity: 0.6; }
+.round i.t { background: var(--target); box-shadow: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.8125rem; color: var(--muted); font-family: var(--f-display); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+@media (max-width: 760px) { .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat { display: grid; gap: 2px; min-width: 0; }
+.stat b { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: var(--s1); font-weight: 600; }
+.stat span { font-size: 0.8125rem; color: var(--muted); font-family: var(--f-display); }
+.note { font-size: 0.875rem; color: var(--muted); }
+
+/* ---------- method */
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; overflow-x: auto; }
+.figure svg { display: block; width: 100%; min-width: 620px; height: auto; }
+.figure text { font-family: var(--f-mono); font-size: 12px; fill: var(--ink); }
+.figure .cap { font-family: var(--f-display); font-size: 13px; font-weight: 700; fill: var(--muted); letter-spacing: 0.06em; }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+@media (max-width: 860px) { .steps { grid-template-columns: 1fr; } }
+.step { display: grid; gap: 8px; align-content: start; }
+.step .n { font-family: var(--f-mono); font-size: 0.8125rem; color: var(--draft); }
+.step p { color: var(--ink); }
+.eq { font-family: var(--f-mono); font-size: 0.875rem; background: var(--bg); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: nowrap; }
+.big { display: flex; flex-wrap: wrap; gap: 28px 56px; }
+.big div { display: grid; gap: 4px; }
+.big b { font-family: var(--f-display); font-size: var(--s3); font-weight: 800; letter-spacing: -0.01em; }
+.big span { color: var(--muted); font-size: 0.9375rem; max-width: 26ch; }
+pre.bib { font-family: var(--f-mono); font-size: 0.8125rem; line-height: 1.55; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; margin: 0; }
+.bib-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="title-row">
+      <h1>BitNest</h1>
+      <div class="byte" aria-hidden="true"><span class="hi"></span><span class="hi"></span><span class="hi"></span><span class="hi"></span><span class="lo"></span><span class="lo"></span><span class="lo"></span><span class="lo"></span></div>
+    </div>
+    <p class="subtitle">Bit-Nested Speculative Decoding for Memory-Efficient LLM Inference Acceleration</p>
+    <p class="authors">Chence Yang, Ningxi Cheng, Arash Akbari, Qitao Tan, Qingchan Zhu, Ci Zhang, Changdi Yang, Yanzhi Wang, Wei Niu, Jinhui Wang, Jin Lu, Geng Yuan</p>
+    <div class="links">
+      <a class="btn primary" href="https://arxiv.org/abs/2610.02800">Paper · arXiv 2610.02800</a>
+      <a class="btn" href="https://github.com/YCC-DAVID/BitNest">Code</a>
+      <a class="btn" href="https://huggingface.co/YccHugAi">Models</a>
+      <a class="btn" href="#cite">BibTeX</a>
+    </div>
+  </header>
+
+  <section aria-labelledby="demo-h">
+    <div class="col" style="display:grid;gap:8px">
+      <p class="label">Recorded run</p>
+      <h2 id="demo-h">Same prompt, same GPU: FP16 decoding vs BitNest</h2>
+      <p>Both lanes replay a real run in real time. Each token appears at the moment the GPU produced it, prefill included.
+        In the BitNest lane, <span style="background:var(--draft-soft);border-radius:2px">shaded</span> tokens were proposed by the 4-bit draft and accepted by the 8-bit target;
+        <span style="color:var(--target);font-weight:600">orange</span> tokens came from the target itself.</p>
+    </div>
+    <div class="demo">
+      <div class="demo-top">
+        <div class="tabs" role="tablist" id="tabs"></div>
+        <div class="controls">
+          <button class="btn primary" id="play" type="button">Replay in real time</button>
+          <div class="speed" role="group" aria-label="Playback speed">speed
+            <button type="button" id="sp1" data-s="1" aria-pressed="true">1×</button>
+            <button type="button" id="sp05" data-s="0.5" aria-pressed="false">0.5×</button>
+            <button type="button" id="sp025" data-s="0.25" aria-pressed="false">0.25×</button>
+          </div>
+        </div>
+      </div>
+      <div class="prompt" id="prompt"></div>
+      <div class="lanes">
+        <div class="lane fp">
+          <div class="lane-head">
+            <div class="lane-name">FP16 autoregressive<small>one token per forward pass, 16-bit weights</small></div>
+            <div class="meter"><strong id="fp-rate">–</strong><span id="fp-clock">tok/s</span></div>
+          </div>
+          <div class="track"><i id="fp-bar"></i></div>
+          <div class="out" id="fp-out" aria-live="off"></div>
+        </div>
+        <div class="lane bn">
+          <div class="lane-head">
+            <div class="lane-name">BitNest<small>W4A8 draft, γ = <span id="g"></span>, verified by the W8A8 target</small></div>
+            <div class="meter"><strong id="bn-rate">–</strong><span id="bn-clock">tok/s</span></div>
+          </div>
+          <div class="track"><i id="bn-bar"></i></div>
+          <div class="out" id="bn-out" aria-live="off"></div>
+        </div>
+      </div>
+      <div style="display:grid;gap:8px">
+        <p class="label">BitNest rounds: γ draft slots, then the target's token</p>
+        <div class="rounds" id="rounds"></div>
+        <div class="legend">
+          <span><i class="sw" style="background:var(--draft)"></i>draft token accepted</span>
+          <span><i class="sw" style="box-shadow:inset 0 0 0 1px var(--muted)"></i>draft token rejected</span>
+          <span><i class="sw" style="background:var(--target)"></i>token from the W8A8 target</span>
+        </div>
+      </div>
+      <div class="summary" id="summary"></div>
+      <p class="note" id="env"></p>
+    </div>
+  </section>
+
+  <section aria-labelledby="abs-h">
+    <div class="col" style="display:grid;gap:14px">
+      <p class="label">Abstract</p>
+      <h2 id="abs-h">A draft model that lives inside the target's weights</h2>
+      <p>Speculative decoding needs a cheap draft model, and keeping a separate one costs memory. BitNest embeds a low-precision
+        draft inside the higher-precision target weights. A single 8-bit tensor serves both: the target reads all 8 bits, the
+        draft reads only the high 4 bits. Rather than truncating an 8-bit model, BitNest first builds a strong low-precision
+        foundation and then recovers the higher precision through a residual refinement. The same nesting extends to the KV
+        cache for long contexts. Across 7B–8B models, BitNest reaches an average speculative acceptance rate of 95.2% and a
+        1.48–1.61× end-to-end speedup over FP16 autoregressive decoding.</p>
+    </div>
+    <div class="big">
+      <div><b>95.2%</b><span>average speculative acceptance rate, 7B–8B models</span></div>
+      <div><b>1.48–1.61×</b><span>end-to-end speedup over FP16 autoregressive decoding</span></div>
+      <div><b>0 bytes</b><span>of extra weight memory for the draft model</span></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="m-h">
+    <div class="col" style="display:grid;gap:8px">
+      <p class="label">Method</p>
+      <h2 id="m-h">One byte, two models</h2>
+      <p>Every weight is stored as an 8-bit code split into two 4-bit planes. The draft streams only the high plane, so a draft
+        step moves half the bytes of a target step.</p>
+    </div>
+    <div class="figure">
+      <svg viewBox="0 0 880 250" role="img" aria-labelledby="fig-t">
+        <title id="fig-t">An 8-bit weight code is split into a high nibble read by the draft and a low nibble that only the target adds.</title>
+        <text class="cap" x="20" y="28">8-BIT WEIGHT CODE</text>
+        <g id="cells"></g>
+        <text x="20" y="128">high nibble = q4 + 8</text>
+        <text x="236" y="128">low nibble = qr + 8</text>
+        <path d="M 112 140 L 112 172 L 560 172" fill="none" stroke="var(--draft)" stroke-width="2"></path>
+        <path d="M 328 140 L 328 214 L 560 214" fill="none" stroke="var(--target)" stroke-width="2"></path>
+        <path d="M 112 172 L 112 214 L 560 214" fill="none" stroke="var(--draft)" stroke-width="2" stroke-dasharray="4 4"></path>
+        <rect x="568" y="154" width="296" height="36" rx="6" fill="var(--draft-soft)"></rect>
+        <text x="582" y="177">draft  W4 = q4 · s          (W4A8)</text>
+        <rect x="568" y="196" width="296" height="36" rx="6" fill="var(--target-soft)"></rect>
+        <text x="582" y="219">target W8 = (16·q4 + qr) · s/16  (W8A8)</text>
+        <text class="cap" x="568" y="140">READ BY</text>
+      </svg>
+    </div>
+    <div class="steps">
+      <div class="step"><span class="n">Step 1 · rotate</span><h3>Remove outliers</h3>
+        <p>Learned rotations (SpinQuant) are fused into the weights so that 4-bit quantization is accurate.</p></div>
+      <div class="step"><span class="n">Step 2 · fit the draft</span><h3>GPTQ at 4 bits</h3>
+        <p>The 4-bit model is fitted first with GPTQ and locked as the high nibble, so the draft is a strong model in its own right.</p>
+        <div class="eq">hi = q4 = GPTQ-W4(W)</div></div>
+      <div class="step"><span class="n">Step 3 · refine</span><h3>Residual back to 8 bits</h3>
+        <p>The low nibble rounds the remaining residual on a 16× finer grid, recovering 8-bit quality in closed form.</p>
+        <div class="eq">lo = qr = round((W − q4·s) / (s/16))</div></div>
+    </div>
+    <div class="col" style="display:grid;gap:10px">
+      <h3>Decoding</h3>
+      <p>The draft proposes γ tokens one at a time reading only the high planes; the target then checks all of them in a single
+        batched pass reading both planes and keeps the longest prefix it agrees with, plus one token of its own. The output is
+        the target's greedy output. The KV cache is nested the same way: the draft attends over 4-bit keys and values, the
+        target over 8-bit ones, from one cache. Dual-plane GEMM and attention kernels are written in Triton, and every step
+        runs as a captured CUDA graph.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="cite">
+    <div class="bib-row"><h2 id="cite">Citation</h2><button class="btn" id="copy" type="button">Copy BibTeX</button></div>
+    <pre class="bib" id="bib">@article{yang2026bitnest,
+  title   = {BitNest: Bit-Nested Speculative Decoding for Memory-Efficient LLM Inference Acceleration},
+  author  = {Yang, Chence and Cheng, Ningxi and Akbari, Arash and Tan, Qitao and Zhu, Qingchan and Zhang, Ci and Yang, Changdi and Wang, Yanzhi and Niu, Wei and Wang, Jinhui and Lu, Jin and Yuan, Geng},
+  journal = {arXiv preprint arXiv:2610.02800},
+  year    = {2026}
+}</pre>
+  </section>
+
+  <footer>BitNest · arXiv 2610.02800</footer>
+</div>
+
+<script id="trace" type="application/json">__TRACE__</script>
+<script>
+(function () {
+  var D = JSON.parse(document.getElementById("trace").textContent);
+  var G = D.gamma, cur = 0, speed = 1, raf = null, t0 = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  $("g").textContent = G;
+  $("env").textContent = "Recorded on one " + D.gpu + " with " + D.source_model + ", batch 1, greedy decoding, PyTorch " + D.torch.split("+")[0] +
+    ". Both lanes use the same engine (CUDA graphs, Triton attention). Small wording differences between the lanes come from the 8-bit target versus the 16-bit model.";
+
+  // byte diagram cells
+  (function () {
+    var g = $("cells"), bits = [1,0,1,1, 0,1,1,0], ns = "http://www.w3.org/2000/svg";
+    for (var i = 0; i < 8; i++) {
+      var r = document.createElementNS(ns, "rect");
+      r.setAttribute("x", 20 + i * 54); r.setAttribute("y", 44); r.setAttribute("width", 48); r.setAttribute("height", 52); r.setAttribute("rx", 6);
+      r.setAttribute("fill", i < 4 ? "var(--draft)" : "var(--target)"); r.setAttribute("opacity", i < 4 ? "1" : "0.85"); g.appendChild(r);
+      var t = document.createElementNS(ns, "text");
+      t.setAttribute("x", 44 + i * 54); t.setAttribute("y", 76); t.setAttribute("text-anchor", "middle"); t.setAttribute("style", "fill:#fff;font-size:16px;font-weight:600");
+      t.textContent = bits[i]; g.appendChild(t);
+    }
+  })();
+
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  // per-token kinds for the BitNest lane: first token comes from prefill (target); in each round the first `accepted`
+  // tokens are accepted drafts, the next one is the target's own
+  function kinds(ex) {
+    var k = ["t"];
+    ex.bitnest.rounds.forEach(function (r) { r.tokens.forEach(function (_, j) { k.push(j < r.accepted ? "d" : "t"); }); });
+    return k.slice(0, ex.bitnest.pieces.length);
+  }
+
+  function buildTabs() {
+    var tabs = $("tabs");
+    D.examples.forEach(function (ex, i) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "tab"; b.id = "tab-" + ex.id; b.setAttribute("role", "tab");
+      b.textContent = ex.title; b.setAttribute("aria-selected", i === cur ? "true" : "false");
+      b.addEventListener("click", function () { select(i); });
+      tabs.appendChild(b);
+    });
+  }
+
+  function buildRounds(ex) {
+    var box = $("rounds"); box.innerHTML = "";
+    ex.bitnest.rounds.forEach(function (r) {
+      var el = document.createElement("div"); el.className = "round"; el.style.setProperty("--g", G);
+      for (var j = 0; j < G; j++) { var c = document.createElement("i"); c.className = j < r.accepted ? "a" : "x"; el.appendChild(c); }
+      var t = document.createElement("i"); t.className = "t"; el.appendChild(t);
+      box.appendChild(el);
+    });
+  }
+
+  function fmtS(s) { return s.toFixed(2) + " s"; }
+
+  function render(ex, ms) {
+    // ms: elapsed wall time since the request, in ms of the recording (null = finished state)
+    var lanes = [["fp", ex.fp16, null], ["bn", ex.bitnest, kinds(ex)]];
+    lanes.forEach(function (L) {
+      var id = L[0], d = L[1], kd = L[2], pre = d.prefill_s * 1000, n = d.pieces.length;
+      var tEnd = pre + d.times[n - 1] * 1000, t = ms === null ? tEnd : Math.min(ms, tEnd), shown = 0;
+      while (shown < n && pre + d.times[shown] * 1000 <= t) shown++;
+      var html = "";
+      for (var i = 0; i < shown; i++) {
+        var p = esc(d.pieces[i]);
+        html += kd ? '<span class="' + kd[i] + '">' + p + "</span>" : p;
+      }
+      if (shown === 0) html = '<span class="wait">prefill · ' + (t / 1000).toFixed(2) + " s</span>";
+      var out = $(id + "-out"), stick = out.scrollTop + out.clientHeight >= out.scrollHeight - 24;
+      out.innerHTML = html;
+      if (ms !== null && stick) out.scrollTop = out.scrollHeight;
+      var dec = (t - pre) / 1000, rate = shown > 1 && dec > 0 ? (shown - 1) / dec : 0;
+      $(id + "-rate").textContent = ms === null ? d.tok_s.toFixed(1) : (rate ? rate.toFixed(1) : "–");
+      $(id + "-clock").textContent = "tok/s · " + shown + " tokens · " + fmtS(t / 1000);
+      $(id + "-bar").style.width = (100 * shown / n) + "%";
+    });
+    var rs = $("rounds").children, bpre = ex.bitnest.prefill_s * 1000;
+    for (var r = 0; r < rs.length; r++) rs[r].classList.toggle("on", ms === null || bpre + ex.bitnest.rounds[r].t * 1000 <= ms);
+  }
+
+  function summary(ex) {
+    var f = ex.fp16, b = ex.bitnest;
+    var fEnd = f.prefill_s + f.times[f.times.length - 1], bEnd = b.prefill_s + b.times[b.times.length - 1];
+    var items = [
+      [(b.tok_s / f.tok_s).toFixed(2) + "×", "decode speedup over FP16"],
+      [(fEnd / bEnd).toFixed(2) + "×", "end-to-end, prefill included"],
+      [(100 * b.accept).toFixed(1) + "%", "draft tokens accepted"],
+      [fmtS(bEnd) + " / " + fmtS(fEnd), "BitNest / FP16 time to last token"]
+    ];
+    $("summary").innerHTML = items.map(function (it) { return '<div class="stat"><b>' + it[0] + "</b><span>" + it[1] + "</span></div>"; }).join("");
+  }
+
+  function stop() { if (raf) cancelAnimationFrame(raf); raf = null; $("play").textContent = "Replay in real time"; }
+
+  function select(i) {
+    stop(); cur = i;
+    Array.prototype.forEach.call($("tabs").children, function (b, j) { b.setAttribute("aria-selected", j === i ? "true" : "false"); });
+    var ex = D.examples[i];
+    $("prompt").innerHTML = (ex.id === "math" ? "<b>[4 solved examples omitted]</b>\n" : "") + esc(ex.prompt);
+    buildRounds(ex); summary(ex); render(ex, null);
+    $("fp-out").scrollTop = 0; $("bn-out").scrollTop = 0;
+  }
+
+  function play() {
+    if (raf) { stop(); render(D.examples[cur], null); return; }
+    var ex = D.examples[cur];
+    var end = Math.max(ex.fp16.prefill_s + ex.fp16.times[ex.fp16.times.length - 1], ex.bitnest.prefill_s + ex.bitnest.times[ex.bitnest.times.length - 1]) * 1000;
+    $("fp-out").scrollTop = 0; $("bn-out").scrollTop = 0;
+    $("play").textContent = "Stop"; t0 = performance.now();
+    var tick = function (now) {
+      var ms = (now - t0) * speed;
+      render(ex, Math.min(ms, end));
+      if (ms < end) raf = requestAnimationFrame(tick); else { raf = null; $("play").textContent = "Replay in real time"; }
+    };
+    raf = requestAnimationFrame(tick);
+  }
+
+  $("play").addEventListener("click", play);
+  ["sp1", "sp05", "sp025"].forEach(function (id) {
+    $(id).addEventListener("click", function () {
+      speed = parseFloat(this.getAttribute("data-s"));
+      ["sp1", "sp05", "sp025"].forEach(function (o) { $(o).setAttribute("aria-pressed", o === id ? "true" : "false"); });
+      if (raf) { stop(); play(); }
+    });
+  });
+  $("copy").addEventListener("click", function () {
+    var txt = $("bib").textContent, btn = this;
+    var done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy BibTeX"; }, 1500); };
+    var fallback = function () { var r = document.createRange(); r.selectNodeContents($("bib")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "Selected, press Ctrl+C"; };
+    try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
+  });
+
+  buildTabs(); select(0);
+})();
+</script>

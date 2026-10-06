@@ -5,6 +5,7 @@ new tokens' bf16 K/V (prefill computes attention directly from them)."""
 import torch
 from transformers import StaticCache
 
+from bitnest.decode_attn import DECODE_MAX_Q
 from bitnest.kv_planes import quant_kv_planes, quant_kv_planes_into  # noqa: F401
 
 
@@ -62,7 +63,7 @@ class PlanesCache(StaticCache):
             k_q = hadamard_transform(k_q, scale=self.head_dim ** -0.5)
         quant_kv_planes_into(k_q, cp, self.khi[layer_idx], self.klo[layer_idx], self.ks[layer_idx], self.k_off[layer_idx])
         quant_kv_planes_into(value_states.contiguous(), cp, self.vhi[layer_idx], self.vlo[layer_idx], self.vs[layer_idx], self.v_off[layer_idx])
-        if key_states.shape[2] > 64 and layer_idx == 0:
+        if key_states.shape[2] > DECODE_MAX_Q and layer_idx == 0:
             self.seen = int(cp.shape[0])   # update the python-side counter on prefill only (never inside a captured graph)
         return key_states, value_states
 

@@ -1,11 +1,11 @@
-"""Decode attention backend: replaces the SDPA decode path (StaticCache / PlanesCache, q_len <= 64) with the Triton
+"""Decode attention backend: replaces the SDPA decode path (StaticCache / PlanesCache, q_len <= DECODE_MAX_Q) with the Triton
 flash-decoding kernels (bf16 KV: decode_attn; nested KV4/KV8 planes: kv_planes). Prefill / cache-less calls fall back
 to the original path.
   install(arch)          repository modeling (rotated build path): monkeypatch Llama / Qwen2 attention
   install_stock_wrapper  transformers' native Llama / Qwen2 classes (cold-load path, fp16 baseline)"""
 import torch.nn.functional as F
 
-from bitnest.decode_attn import decode_attention
+from bitnest.decode_attn import DECODE_MAX_Q, decode_attention
 from bitnest.kv_planes import decode_attention_planes
 
 MODE_REF = {"get": lambda: "target"}   # injected by the runner: returns the current draft / target mode
@@ -55,9 +55,9 @@ def install(arch="llama"):
     def forward(self, hidden_states, attention_mask=None, position_ids=None, past_key_value=None, output_attentions=False, use_cache=False, cache_position=None, position_embeddings=None, **kw):
         bsz, q_len, _ = hidden_states.size()
         from transformers import StaticCache
-        if past_key_value is None or not isinstance(past_key_value, StaticCache) or cache_position is None or (q_len > 64 and not _is_planes(past_key_value)):
+        if past_key_value is None or not isinstance(past_key_value, StaticCache) or cache_position is None or (q_len > DECODE_MAX_Q and not _is_planes(past_key_value)):
             return orig(self, hidden_states, attention_mask, position_ids, past_key_value, output_attentions, use_cache, cache_position, position_embeddings, **kw)
-        if q_len > 64:   # prefill into a planes cache: quantize into the planes, attend with this call's bf16 K/V
+        if q_len > DECODE_MAX_Q:   # prefill into a planes cache: quantize into the planes, attend with this call's bf16 K/V
             q = self.q_proj(hidden_states).view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
             k = self.k_proj(hidden_states).view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
             v = self.v_proj(hidden_states).view(bsz, q_len, self.num_key_value_heads, self.head_dim).transpose(1, 2)
@@ -88,7 +88,7 @@ def install(arch="llama"):
 
 def install_hf_stock():
     """Register the same decode attention for transformers' native Llama / Qwen2 through ALL_ATTENTION_FUNCTIONS:
-    StaticCache + q_len <= 64 goes to the kernel, everything else to sdpa."""
+    StaticCache + q_len <= DECODE_MAX_Q goes to the kernel, everything else to sdpa."""
     from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS
     from transformers.integrations.sdpa_attention import sdpa_attention_forward
 
@@ -98,14 +98,14 @@ def install_hf_stock():
         pos = cache_position[0] if cache_position is not None else (position_ids[0, 0] if position_ids is not None else getattr(module, "_bn_pos", None))
         cache = getattr(module, "_bn_cache", None)
         if cache is not None and _is_planes(cache):
-            if query.shape[2] <= 64:
+            if query.shape[2] <= DECODE_MAX_Q:
                 out = decode_attention_planes(_q_r3(query, cache), *cache.planes(module.layer_idx), pos, read_lo=_read_lo(), sm_scale=scaling)
                 if cache.v_off_h[module.layer_idx] is not None:
                     out = out + cache.v_off_h[module.layer_idx]
             else:
                 out = _prefill_sdpa(query, key, value, scaling)   # prefill: key / value are this call's bf16 K/V (whole prefix)
             return out.transpose(1, 2).contiguous(), None
-        if pos is not None and query.shape[2] <= 64 and key.shape[2] > query.shape[2] + 8:   # key is the whole static cache
+        if pos is not None and query.shape[2] <= DECODE_MAX_Q and key.shape[2] > query.shape[2] + 8:   # key is the whole static cache
             out = decode_attention(query.contiguous(), key, value, pos, sm_scale=scaling)
             return out.transpose(1, 2).contiguous(), None
         return sdpa_attention_forward(module, query, key, value, attention_mask, scaling=scaling, dropout=dropout, **kw)
