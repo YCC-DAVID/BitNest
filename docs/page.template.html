@@ -20,7 +20,9 @@
   --target-soft: #f7e1d4;
   --mark-hero: #2f5fd7;    /* chart marks: BitNest */
   --mark-alt: #c2541c;
-  --mark-base: #8a94a3;    /* chart marks: baselines (de-emphasis) */
+  --mark-base: #8a94a3;    /* chart marks: neutral references (FP16/W8A8 AR) */
+  --mark-hero-2: #86a8f0;  /* other BitNest variants */
+  --m-qspec: #12a06f; --m-quantspec: #d08f00; --m-dv: #b8408a;   /* baseline methods (validated all-pairs, light) */
   --fp16: #5d6878;
   --focus: #2f5fd7;
   --h1: #cde2fb; --h2: #9ec5f4; --h3: #6da7ec; --h4: #3987e5; --h5: #256abf; --h6: #184f95;  /* sequential blue (heatmap) */
@@ -33,7 +35,7 @@
   :root:not([data-theme="light"]) {
     --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --muted: #9aa6b7; --faint: #7d8796; --line: #2a3442; --grid: #222b37;
     --draft: #7ea2ff; --draft-soft: #1f2d4f; --target: #f08a52; --target-soft: #44281b;
-    --mark-hero: #6488f0; --mark-alt: #dd6d36; --mark-base: #7d8796; --fp16: #a3adbb; --focus: #7ea2ff;
+    --mark-hero: #6488f0; --mark-alt: #dd6d36; --mark-base: #7d8796; --mark-hero-2: #3a58ad; --m-qspec: #159a7a; --m-quantspec: #c98500; --m-dv: #a94a9e; --fp16: #a3adbb; --focus: #7ea2ff;
     --h1: #1b2a44; --h2: #1c3d6e; --h3: #22539a; --h4: #2e6bc2; --h5: #4f8ae0; --h6: #86b6ef;
     color-scheme: dark;
   }
@@ -41,7 +43,7 @@
 :root[data-theme="dark"] {
   --bg: #0f141b; --surface: #171e28; --ink: #e6ebf2; --muted: #9aa6b7; --faint: #7d8796; --line: #2a3442; --grid: #222b37;
   --draft: #7ea2ff; --draft-soft: #1f2d4f; --target: #f08a52; --target-soft: #44281b;
-  --mark-hero: #6488f0; --mark-alt: #dd6d36; --mark-base: #7d8796; --fp16: #a3adbb; --focus: #7ea2ff;
+  --mark-hero: #6488f0; --mark-alt: #dd6d36; --mark-base: #7d8796; --mark-hero-2: #3a58ad; --m-qspec: #159a7a; --m-quantspec: #c98500; --m-dv: #a94a9e; --fp16: #a3adbb; --focus: #7ea2ff;
   --h1: #1b2a44; --h2: #1c3d6e; --h3: #22539a; --h4: #2e6bc2; --h5: #4f8ae0; --h6: #86b6ef;
   color-scheme: dark;
 }
@@ -416,10 +418,10 @@ footer { padding-top: 56px; color: var(--muted); font-size: 0.875rem; }
 var WL = ["Wiki", "GSM8K", "Code", "ShareGPT", "LongDoc", "PG19"];
 var MODELS = [["llama2", "LLaMA-2-7B"], ["llama3", "LLaMA-3-8B"], ["qwen2", "Qwen2-7B"], ["qwen25", "Qwen2.5-7B"]];
 var METHODS = [  // fixed order and marks; BitNest is the emphasized series
-  { id: "bitnest", name: "BitNest", cfg: "W4A8 → W8A8", shape: "circle", hero: true },
-  { id: "qspec", name: "QSpec", cfg: "W4A4 → W4A16", shape: "square" },
-  { id: "quantspec", name: "QuantSpec", cfg: "W4A16 → W16A16", shape: "triangle" },
-  { id: "dv", name: "Draft & Verify", cfg: "W16A16 → W16A16", shape: "diamond" }
+  { id: "bitnest", name: "BitNest", cfg: "W4A8 → W8A8", shape: "circle", hero: true, color: "var(--mark-hero)" },
+  { id: "qspec", name: "QSpec", cfg: "W4A4 → W4A16", shape: "square", color: "var(--m-qspec)" },
+  { id: "quantspec", name: "QuantSpec", cfg: "W4A16 → W16A16", shape: "triangle", color: "var(--m-quantspec)" },
+  { id: "dv", name: "Draft & Verify", cfg: "W16A16 → W16A16", shape: "diamond", color: "var(--m-dv)" }
 ];
 var SPEED = {
   llama2: { qspec: [1.35, 1.43, 1.46, 1.46, 1.44, 1.40], quantspec: [1.17, 1.19, 1.23, 1.22, 1.17, 1.12], dv: [0.96, 1.14, 1.16, 1.20, 1.16, 1.01], bitnest: [1.50, 1.59, 1.59, 1.61, 1.60, 1.57] },
@@ -441,15 +443,15 @@ var QUALITY = {
 var CTX = ["4K", "8K", "16K", "32K"];
 var LC_SPEED = [
   { name: "BitNest, draft KV4 → target KV8", short: "BitNest KV4→KV8", v: [1.53, 1.51, 1.56, 1.66], hero: true },
-  { name: "BitNest, KV8 → KV8", short: "BitNest KV8→KV8", v: [1.57, 1.45, 1.46, 1.38], alt: true },
+  { name: "BitNest, KV8 → KV8", short: "BitNest KV8→KV8", v: [1.57, 1.45, 1.46, 1.38], color: "var(--mark-hero-2)" },
   { name: "BitNest, BF16 KV", short: "BitNest BF16 KV", v: [1.49, 1.43, 1.30, 1.13] },
-  { name: "QuantSpec", short: "QuantSpec", v: [1.11, 1.12, 1.19, 1.21] },
-  { name: "QSpec", short: "QSpec", v: [1.42, 1.30, 1.19, 1.11] }
+  { name: "QuantSpec", short: "QuantSpec", v: [1.11, 1.12, 1.19, 1.21], color: "var(--m-quantspec)" },
+  { name: "QSpec", short: "QSpec", v: [1.42, 1.30, 1.19, 1.11], color: "var(--m-qspec)" }
 ];
 var LC_MEM = [
   { name: "BitNest", short: "BitNest", v: [9.2, 10.8, 14.1, 21.0], hero: true },
-  { name: "QSpec", short: "QSpec", v: [6.9, 9.4, 14.5, 24.0] },
-  { name: "QuantSpec", short: "QuantSpec", v: [16.2, 17.6, 20.4, 25.8] },
+  { name: "QSpec", short: "QSpec", v: [6.9, 9.4, 14.5, 24.0], color: "var(--m-qspec)" },
+  { name: "QuantSpec", short: "QuantSpec", v: [16.2, 17.6, 20.4, 25.8], color: "var(--m-quantspec)" },
   { name: "W8A8 AR", short: "W8A8 AR", v: [9.5, 12.3, 18.0, 29.6] },
   { name: "BF16 AR", short: "BF16 AR", v: [15.1, 17.6, 22.7, 33.7] }
 ];
@@ -548,9 +550,9 @@ var EDGE = [
     });
     var present = METHODS.filter(function (m) { return data[m.id] && !spHidden[m.id]; });
     present.slice().reverse().forEach(function (m) {   // BitNest drawn last (on top)
-      var v = data[m.id], col = m.hero ? "var(--mark-hero)" : "var(--mark-base)";
+      var v = data[m.id], col = m.color;
       var d = v.map(function (x, i) { var p = pt(i, x); return (i ? "L" : "M") + p[0] + " " + p[1]; }).join(" ") + "Z";
-      el("path", { d: d, fill: m.hero ? "var(--mark-hero)" : "none", "fill-opacity": m.hero ? 0.12 : 0, stroke: col, "stroke-width": m.hero ? 2.5 : 1.5, "stroke-linejoin": "round" }, svg);
+      el("path", { d: d, fill: col, "fill-opacity": m.hero ? 0.12 : 0.04, stroke: col, "stroke-width": m.hero ? 2.5 : 1.75, "stroke-linejoin": "round" }, svg);
       v.forEach(function (x, i) { var p = pt(i, x); shape(svg, m.shape, p[0], p[1], m.hero ? 5 : 4.5, col); });
       if (m.hero && !narrow) v.forEach(function (x, i) {   // direct labels for BitNest only (tooltip/table on phones)
         var p = pt(i, x), c = Math.cos(ang(i)), s = Math.sin(ang(i));
@@ -568,7 +570,7 @@ var EDGE = [
       var show = function () {
         spokes[i].setAttribute("style", "stroke:var(--ink);stroke-width:1.5");
         var p = pt(i, hi);
-        tip.show(w, all.map(function (m) { return { label: m.name, value: data[m.id][i].toFixed(2) + "×", color: m.hero ? "var(--mark-hero)" : "var(--mark-base)", shape: m.shape }; }),
+        tip.show(w, all.map(function (m) { return { label: m.name, value: data[m.id][i].toFixed(2) + "×", color: m.color, shape: m.shape }; }),
                  Math.min(Math.max(p[0], 0), W - 40), Math.min(Math.max(p[1], 40), H - 40));
       };
       var hide = function () { spokes[i].removeAttribute("style"); tip.hide(); };
@@ -578,7 +580,7 @@ var EDGE = [
     var keys = $("sp-keys"); keys.innerHTML = "";
     METHODS.forEach(function (m) {
       var b = h("button", "keybtn"); b.type = "button"; var off = !data[m.id];
-      b.appendChild(keySvg(m.shape, m.hero ? "var(--mark-hero)" : "var(--mark-base)"));
+      b.appendChild(keySvg(m.shape, m.color));
       b.appendChild(document.createTextNode(m.name + " · " + m.cfg + (off ? " · N/A" : "")));
       b.disabled = off; b.setAttribute("aria-pressed", off || spHidden[m.id] ? "false" : "true");
       b.addEventListener("click", function () { spHidden[m.id] = !spHidden[m.id]; drawSpeed(); });
@@ -598,7 +600,7 @@ var EDGE = [
   segButtons($("sp-models"), MODELS, spModel, function (k) { spModel = k; drawSpeed(); });
 
   /* ---------- quality: loss relative to FP16 ---------- */
-  var QSTYLE = { "W8A8": { fill: "var(--grid)", stroke: "var(--mark-base)" }, "QSpec (W4A16)": { fill: "var(--mark-base)", stroke: "none" }, "BitNest": { fill: "var(--mark-hero)", stroke: "none" } };
+  var QSTYLE = { "W8A8": { fill: "var(--grid)", stroke: "var(--mark-base)" }, "QSpec (W4A16)": { fill: "var(--m-qspec)", stroke: "none" }, "BitNest": { fill: "var(--mark-hero)", stroke: "none" } };
   var qModel = "llama2", qHidden = {};
   function qLoss(ci, v, fp) { return ci === 1 ? (v - fp) / fp * 100 : (1 - v / fp) * 100; }   // quality change vs FP16 (negative = worse): GSM8K relative accuracy change; PPL relative decrease
   function drawQuality() {
@@ -680,13 +682,13 @@ var EDGE = [
       var t = el("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end" }, svg); t.textContent = opt.fmt(v);
     });
     CTX.forEach(function (c, i) { var t = el("text", { x: x(i), y: H - 8, "text-anchor": "middle" }, svg); t.textContent = c; });
-    var colorOf = function (s) { return s.hero ? "var(--mark-hero)" : s.alt ? "var(--mark-alt)" : "var(--mark-base)"; };
+    var colorOf = function (s) { return s.hero ? "var(--mark-hero)" : s.color || "var(--mark-base)"; };
     var order = series.slice().sort(function (a, b) { return (a.hero ? 1 : 0) - (b.hero ? 1 : 0); });   // hero on top
     var paths = {};
     order.forEach(function (s) {
       var d = s.v.map(function (v, i) { return (i ? "L" : "M") + x(i) + " " + y(v); }).join(" ");
       var g = el("g", { "data-s": s.short }, svg); paths[s.short] = g;
-      el("path", { d: d, fill: "none", stroke: colorOf(s), "stroke-width": s.hero ? 2.5 : 2, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: s.hero || s.alt ? 1 : 0.85 }, g);
+      el("path", { d: d, fill: "none", stroke: colorOf(s), "stroke-width": s.hero ? 2.5 : 2, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: s.hero || s.color ? 1 : 0.85 }, g);
       s.v.forEach(function (v, i) { el("circle", { cx: x(i), cy: y(v), r: s.hero ? 4.5 : 3.5, fill: colorOf(s), stroke: "var(--surface)", "stroke-width": 2 }, g); });
     });
     // end labels with collision avoidance (min 15px apart) and leader lines
